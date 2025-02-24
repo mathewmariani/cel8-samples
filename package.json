@@ -1,0 +1,16 @@
+{
+  "scripts": {
+    "cmake": "cmake --preset Release -B build && cmake --build build --preset Release",
+    "emsdk": "git clone https://github.com/emscripten-core/emsdk && cd emsdk && ./emsdk install latest && ./emsdk activate --embedded latest && cd ..",
+    "libs:cel8": "./libs/cel8/update.sh",
+    "libs:sokol": "./libs/sokol/update.sh",
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "astro": "astro"
+  },
+  "devDependencies": {
+    "@types/node": "^22.12.0",
+    "astro": "^5.1.8"
+  }
+}
