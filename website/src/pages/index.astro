@@ -1,28 +1,17 @@
 ---
-import { Image } from "astro:assets";
 import Meta from "../components/Meta.astro";
 import Footer from "../components/Footer.astro";
 
-import clock from "../assets/clock.png";
-import crosshair from "../assets/crosshair.png";
-import font from "../assets/font.png";
-import glitch from "../assets/glitch.png";
-import hello from "../assets/hello.png";
-import palette from "../assets/palette.png";
-import snake from "../assets/256x256.png";
-import sprite from "../assets/256x256.png";
-import tetris from "../assets/tetris.png";
-
 const samples = [
-  { href: "samples/clock/index.html", alt: "clock", img: clock },
-  { href: "samples/crosshair/index.html", alt: "crosshair", img: crosshair },
-  { href: "samples/font/index.html", alt: "font", img: font },
-  { href: "samples/glitch/index.html", alt: "glitch", img: glitch },
-  { href: "samples/hello/index.html", alt: "hello", img: hello },
-  { href: "samples/palette/index.html", alt: "palette", img: palette },
-  // { href: "samples/snake/index.html", alt: "snake", img: snake },
-  // { href: "samples/sprite/index.html", alt: "sprite", img: sprite },
-  { href: "samples/tetris/index.html", alt: "tetris", img: tetris },
+  { href: "samples/clock/index.html", name: "clock" },
+  { href: "samples/crosshair/index.html", name: "crosshair" },
+  { href: "samples/font/index.html", name: "font" },
+  { href: "samples/glitch/index.html", name: "glitch" },
+  { href: "samples/hello/index.html", name: "hello" },
+  { href: "samples/palette/index.html", name: "palette" },
+  // { href: "samples/snake/index.html", name: "snake" },
+  // { href: "samples/sprite/index.html", name: "sprite" },
+  { href: "samples/tetris/index.html", name: "tetris" },
 ];
 ---
 
@@ -37,20 +26,20 @@ const samples = [
         <h1>cel8-samples</h1>
         <div class="row row-cols-1 row-cols-sm-4 g-4">
           {
-            samples.map(({ href, alt, img }) => (
+            samples.map(({ href, name }) => (
               <div class="col">
                 <div class="card h-100">
                   <a href={href}>
                     <img
-                      src={img.src}
+                      src={`/cel8-samples/images/${name}.png`}
                       class="card-img-top"
-                      alt={alt}
+                      alt={name}
                       width={128}
                       height={128}
                     />
                   </a>
                   <div class="card-footer">
-                    <small class="text-body-secondary">{alt}</small>
+                    <small class="text-body-secondary">{name}</small>
                   </div>
                 </div>
               </div>
