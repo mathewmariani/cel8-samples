@@ -41,14 +41,15 @@ const { name } = Astro.props;
     console.log("onerror: " + event.message);
   };
 </script>
-<script type="text/javascript" src=`demos/${name}.js` async is:inline></script>
+<script type="text/javascript" src=`samples/${name}.js` async is:inline
+></script>
 <style>
   .demo {
     margin-right: auto;
     margin-left: auto;
     border: 0;
-    width: 800px;
-    height: 600px;
+    width: 512px;
+    height: 512px;
     overflow: hidden;
     display: block;
     image-rendering: optimizeSpeed;

@@ -24,6 +24,10 @@ jobs:
         with:
           version: 1.10.0
 
+      - name: Install Packages 📦
+        run: |
+          npm ci
+
       - name: Install and Activate Emscripten 🔧
         run: |
           git clone https://github.com/emscripten-core/emsdk
@@ -34,16 +38,15 @@ jobs:
 
       - name: Build with Cmake 🔧
         run: |
-          cmake --preset web
-          cmake --build --preset web-release
-
-      - name: Install Packages 📦
-        run: npm ci
+          source ./emsdk/emsdk_env.sh
+          cmake --preset Release
+          cmake --build --preset Release
 
       - name: Building Website 🔧
-        run: npm run build
+        run: |
+          npm run build
 
       - name: Deploy 🚀
         uses: JamesIves/github-pages-deploy-action@v4
         with:
-          folder: website
+          folder: dist

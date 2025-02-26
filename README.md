@@ -1,18 +1,17 @@
-# cel8 
+# cel8-samples
 [![Build](/../../actions/workflows/main.yml/badge.svg)](/../../actions/workflows/main.yml)
 
-A *\*tiny\** framework for making small grid-based games in c99.
+Sample code for **[cel8.h](https://github.com/mathewmariani/cel8)**
 
-## Repository Layout
-*   `build/` - Intermediate files and other build output. 
-*   `docs/` - Static website generator.
-*   `examples/` - Example programs implemented with sokol.
-*   `libs/` - Required external libraries.
-*   `scripts/` – Scripts used for building the website.
+## How to Build on Windows, Linux and macOS
 
-## Documentation
-See the **[cel8.h](src/cel8.h?raw=1)** header more documentation.
+```
+> git clone https://github.com/mathewmariani/cel8-samples
+> cd cel8-samples
+> cmake --preset Release
+> cmake --build --preset Release
+```
 
 ## License
-This library is free software; you can redistribute it and/or modify it under
-the terms of the MIT license. See [LICENSE](LICENSE) for details.
+This library is free software; you can redistribute it and/or modify it under the terms of the MIT license.
+See [LICENSE](LICENSE) for details.

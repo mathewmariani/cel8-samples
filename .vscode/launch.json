@@ -12,7 +12,6 @@
             "environment": [],
             "preLaunchTask": "CMake: build",
             "MIMode": "lldb",
-            "console": "integratedTerminal",
             "windows": {
                 "MIMode": "gdb"
             },
@@ -27,7 +26,7 @@
             "name": "Web",
             "type": "chrome",
             "request": "launch",
-            "url": "http://localhost:3000/build/web/examples/${command:cmake.buildType}/${command:cmake.launchTargetFilename}",
+            "url": "http://localhost:3000/build/samples/${command:cmake.buildType}/${command:cmake.launchTargetFilename}",
             "preLaunchTask": "StartServer",
             "webRoot": "${workspaceFolder}"
         }

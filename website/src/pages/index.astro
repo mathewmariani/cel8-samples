@@ -1,0 +1,53 @@
+---
+import { Image } from "astro:assets";
+import Meta from "../components/Meta.astro";
+import Footer from "../components/Footer.astro";
+import placeholderImg from "../assets/256x256.png";
+---
+
+<html lang="en" data-bs-theme="dark">
+  <head>
+    <Meta />
+  </head>
+
+  <body class="container" id="top">
+    <main>
+      <section>
+        <h1>cel8-samples</h1>
+        <div class="row row-cols-1 row-cols-sm-4 g-4">
+          {
+            [
+              { href: "samples/clock/index.html", alt: "clock" },
+              { href: "samples/crosshair/index.html", alt: "crosshair" },
+              { href: "samples/font/index.html", alt: "font" },
+              { href: "samples/hello/index.html", alt: "hello" },
+              { href: "samples/palette/index.html", alt: "palette" },
+              { href: "samples/snake/index.html", alt: "snake" },
+              { href: "samples/sprite/index.html", alt: "sprite" },
+              { href: "samples/tetris/index.html", alt: "tetris" },
+            ].map(({ href, alt }) => (
+              <div class="col">
+                <div class="card h-100">
+                  <a href={href}>
+                    <Image
+                      src={placeholderImg}
+                      class="card-img-top"
+                      alt={alt}
+                      width={128}
+                      height={128}
+                    />
+                  </a>
+                  <div class="card-footer">
+                    <small class="text-body-secondary">{alt}</small>
+                  </div>
+                </div>
+              </div>
+            ))
+          }
+        </div>
+      </section>
+    </main>
+    <Footer />
+  </body>
+</html>
+<style></style>

@@ -4,13 +4,13 @@ import Page from "../../layouts/Page.astro";
 import Demo from "../../components/Demo.astro";
 
 export async function getStaticPaths() {
-	const assignments = await getCollection("assignments");
-	return assignments.map((a) => ({
+	const samples = await getCollection("samples");
+	return samples.map((a) => ({
 		params: { slug: a.slug },
 		props: a,
 	}));
 }
-type Props = CollectionEntry<"assignments">;
+type Props = CollectionEntry<"samples">;
 
 const assignment = Astro.props;
 const { Content } = await assignment.render();

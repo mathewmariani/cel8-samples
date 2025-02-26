@@ -776,7 +776,7 @@
               (in HLSL, storage buffers and texture share the same bind space)
             - Metal/MSL: the buffer bind slot N (`[[buffer(N)]]`) where N is 8..15
             - WebGPU/WGSL: the binding N in `@group(0) @binding(N)` where N is 0..127
-            - GL/GLSL: the buffer binding N in `layout(binding=N)` where N is 0..16
+            - GL/GLSL: the buffer binding N in `layout(binding=N)` where N is 0..7
         - note that storage buffers are not supported on all backends
           and platforms
 
@@ -1561,7 +1561,7 @@
       as soon as the vertex format shows up in webgpu.h, sokol_gfx.h will add support.
 
     - Likewise, the following sokol-gfx vertex formats are not supported in WebGPU:
-      R16, R16SN, RG16, RG16SN, RGBA16, RGBA16SN and all PVRTC compressed format.
+      R16, R16SN, RG16, RG16SN, RGBA16, RGBA16SN.
       Unlike unsupported vertex formats, unsupported pixel formats can be queried
       in cross-backend code via sg_query_pixel_format() though.
 
@@ -1827,10 +1827,6 @@ typedef enum sg_pixel_format {
     SG_PIXELFORMAT_BC6H_RGBUF,
     SG_PIXELFORMAT_BC7_RGBA,
     SG_PIXELFORMAT_BC7_SRGBA,
-    SG_PIXELFORMAT_PVRTC_RGB_2BPP,      // FIXME: deprecated
-    SG_PIXELFORMAT_PVRTC_RGB_4BPP,      // FIXME: deprecated
-    SG_PIXELFORMAT_PVRTC_RGBA_2BPP,     // FIXME: deprecated
-    SG_PIXELFORMAT_PVRTC_RGBA_4BPP,     // FIXME: deprecated
     SG_PIXELFORMAT_ETC2_RGB8,
     SG_PIXELFORMAT_ETC2_SRGB8,
     SG_PIXELFORMAT_ETC2_RGB8A1,
@@ -2409,7 +2405,9 @@ typedef enum sg_stencil_op {
                 .dst_factor_alpha
 
     The default value is SG_BLENDFACTOR_ONE for source
-    factors, and SG_BLENDFACTOR_ZERO for destination factors.
+    factors, and for the destination SG_BLENDFACTOR_ZERO if the associated
+    blend-op is ADD, SUBTRACT or REVERSE_SUBTRACT or SG_BLENDFACTOR_ONE
+    if the associated blend-op is MIN or MAX.
 */
 typedef enum sg_blend_factor {
     _SG_BLENDFACTOR_DEFAULT,    // value 0 reserved for default-init
@@ -2452,6 +2450,8 @@ typedef enum sg_blend_op {
     SG_BLENDOP_ADD,
     SG_BLENDOP_SUBTRACT,
     SG_BLENDOP_REVERSE_SUBTRACT,
+    SG_BLENDOP_MIN,
+    SG_BLENDOP_MAX,
     _SG_BLENDOP_NUM,
     _SG_BLENDOP_FORCE_U32 = 0x7FFFFFFF
 } sg_blend_op;
@@ -3062,7 +3062,7 @@ typedef struct sg_sampler_desc {
             - HLSL: the texture(sic) register `register(t0..23)`
             - MSL: the buffer attribute `[[buffer(8..15)]]`
             - WGSL: the binding in `@group(1) @binding(0..127)`
-            - GL: the binding in `layout(binding=0..16)`
+            - GL: the binding in `layout(binding=0..7)`
 
     - reflection information for each combined image-sampler object
       used by the shader:
@@ -3683,10 +3683,12 @@ typedef struct sg_frame_stats {
     _SG_LOGITEM_XMACRO(GL_TEXTURE_FORMAT_NOT_SUPPORTED, "pixel format not supported for texture (gl)") \
     _SG_LOGITEM_XMACRO(GL_3D_TEXTURES_NOT_SUPPORTED, "3d textures not supported (gl)") \
     _SG_LOGITEM_XMACRO(GL_ARRAY_TEXTURES_NOT_SUPPORTED, "array textures not supported (gl)") \
+    _SG_LOGITEM_XMACRO(GL_STORAGEBUFFER_GLSL_BINDING_OUT_OF_RANGE, "GLSL storage buffer bindslot is out of range (must be 0..7) (gl)") \
     _SG_LOGITEM_XMACRO(GL_SHADER_COMPILATION_FAILED, "shader compilation failed (gl)") \
     _SG_LOGITEM_XMACRO(GL_SHADER_LINKING_FAILED, "shader linking failed (gl)") \
-    _SG_LOGITEM_XMACRO(GL_VERTEX_ATTRIBUTE_NOT_FOUND_IN_SHADER, "vertex attribute not found in shader (gl)") \
-    _SG_LOGITEM_XMACRO(GL_IMAGE_SAMPLER_NAME_NOT_FOUND_IN_SHADER, "image-sampler name not found in shader (gl)") \
+    _SG_LOGITEM_XMACRO(GL_VERTEX_ATTRIBUTE_NOT_FOUND_IN_SHADER, "vertex attribute not found in shader; NOTE: may be caused by GL driver's GLSL compiler removing unused globals") \
+    _SG_LOGITEM_XMACRO(GL_UNIFORMBLOCK_NAME_NOT_FOUND_IN_SHADER, "uniform block name not found in shader; NOTE: may be caused by GL driver's GLSL compiler removing unused globals") \
+    _SG_LOGITEM_XMACRO(GL_IMAGE_SAMPLER_NAME_NOT_FOUND_IN_SHADER, "image-sampler name not found in shader; NOTE: may be caused by GL driver's GLSL compiler removing unused globals") \
     _SG_LOGITEM_XMACRO(GL_FRAMEBUFFER_STATUS_UNDEFINED, "framebuffer completeness check failed with GL_FRAMEBUFFER_UNDEFINED (gl)") \
     _SG_LOGITEM_XMACRO(GL_FRAMEBUFFER_STATUS_INCOMPLETE_ATTACHMENT, "framebuffer completeness check failed with GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT (gl)") \
     _SG_LOGITEM_XMACRO(GL_FRAMEBUFFER_STATUS_INCOMPLETE_MISSING_ATTACHMENT, "framebuffer completeness check failed with GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT (gl)") \
@@ -3705,6 +3707,10 @@ typedef struct sg_frame_stats {
     _SG_LOGITEM_XMACRO(D3D11_CREATE_3D_SRV_FAILED, "CreateShaderResourceView() failed for 3d texture (d3d11)") \
     _SG_LOGITEM_XMACRO(D3D11_CREATE_MSAA_TEXTURE_FAILED, "CreateTexture2D() failed for MSAA render target texture (d3d11)") \
     _SG_LOGITEM_XMACRO(D3D11_CREATE_SAMPLER_STATE_FAILED, "CreateSamplerState() failed (d3d11)") \
+    _SG_LOGITEM_XMACRO(D3D11_UNIFORMBLOCK_HLSL_REGISTER_B_OUT_OF_RANGE, "uniform block 'hlsl_register_b_n' is out of range (must be 0..7)") \
+    _SG_LOGITEM_XMACRO(D3D11_STORAGEBUFFER_HLSL_REGISTER_T_OUT_OF_RANGE, "storage buffer 'hlsl_register_t_n' is out of range (must be 0..23)") \
+    _SG_LOGITEM_XMACRO(D3D11_IMAGE_HLSL_REGISTER_T_OUT_OF_RANGE, "image 'hlsl_register_t_n' is out of range (must be 0..23)") \
+    _SG_LOGITEM_XMACRO(D3D11_SAMPLER_HLSL_REGISTER_S_OUT_OF_RANGE, "sampler 'hlsl_register_s_n' is out of rang (must be 0..15)") \
     _SG_LOGITEM_XMACRO(D3D11_LOAD_D3DCOMPILER_47_DLL_FAILED, "loading d3dcompiler_47.dll failed (d3d11)") \
     _SG_LOGITEM_XMACRO(D3D11_SHADER_COMPILATION_FAILED, "shader compilation failed (d3d11)") \
     _SG_LOGITEM_XMACRO(D3D11_SHADER_COMPILATION_OUTPUT, "") \
@@ -3726,6 +3732,10 @@ typedef struct sg_frame_stats {
     _SG_LOGITEM_XMACRO(METAL_SHADER_CREATION_FAILED, "shader creation failed (metal)") \
     _SG_LOGITEM_XMACRO(METAL_SHADER_COMPILATION_OUTPUT, "") \
     _SG_LOGITEM_XMACRO(METAL_SHADER_ENTRY_NOT_FOUND, "shader entry function not found (metal)") \
+    _SG_LOGITEM_XMACRO(METAL_UNIFORMBLOCK_MSL_BUFFER_SLOT_OUT_OF_RANGE, "uniform block 'msl_buffer_n' is out of range (must be 0..7)") \
+    _SG_LOGITEM_XMACRO(METAL_STORAGEBUFFER_MSL_BUFFER_SLOT_OUT_OF_RANGE, "storage buffer 'msl_buffer_n' is out of range (must be 8..15)") \
+    _SG_LOGITEM_XMACRO(METAL_IMAGE_MSL_TEXTURE_SLOT_OUT_OF_RANGE, "image 'msl_texture_n' is out of range (must be 0..15)") \
+    _SG_LOGITEM_XMACRO(METAL_SAMPLER_MSL_SAMPLER_SLOT_OUT_OF_RANGE, "sampler 'msl_sampler_n' is out of range (must be 0..15)") \
     _SG_LOGITEM_XMACRO(METAL_CREATE_RPS_FAILED, "failed to create render pipeline state (metal)") \
     _SG_LOGITEM_XMACRO(METAL_CREATE_RPS_OUTPUT, "") \
     _SG_LOGITEM_XMACRO(METAL_CREATE_DSS_FAILED, "failed to create depth stencil state (metal)") \
@@ -3739,6 +3749,10 @@ typedef struct sg_frame_stats {
     _SG_LOGITEM_XMACRO(WGPU_CREATE_SAMPLER_FAILED, "wgpuDeviceCreateSampler() failed") \
     _SG_LOGITEM_XMACRO(WGPU_CREATE_SHADER_MODULE_FAILED, "wgpuDeviceCreateShaderModule() failed") \
     _SG_LOGITEM_XMACRO(WGPU_SHADER_CREATE_BINDGROUP_LAYOUT_FAILED, "wgpuDeviceCreateBindGroupLayout() for shader stage failed") \
+    _SG_LOGITEM_XMACRO(WGPU_UNIFORMBLOCK_WGSL_GROUP0_BINDING_OUT_OF_RANGE, "uniform block 'wgsl_group0_binding_n' is out of range (must be 0..15)") \
+    _SG_LOGITEM_XMACRO(WGPU_STORAGEBUFFER_WGSL_GROUP1_BINDING_OUT_OF_RANGE, "storage buffer 'wgsl_group1_binding_n' is out of range (must be 0..127)") \
+    _SG_LOGITEM_XMACRO(WGPU_IMAGE_WGSL_GROUP1_BINDING_OUT_OF_RANGE, "image 'wgsl_group1_binding_n' is out of range (must be 0..127)") \
+    _SG_LOGITEM_XMACRO(WGPU_SAMPLER_WGSL_GROUP1_BINDING_OUT_OF_RANGE, "sampler 'wgsl_group1_binding_n' is out of range (must be 0..127)") \
     _SG_LOGITEM_XMACRO(WGPU_CREATE_PIPELINE_LAYOUT_FAILED, "wgpuDeviceCreatePipelineLayout() failed") \
     _SG_LOGITEM_XMACRO(WGPU_CREATE_RENDER_PIPELINE_FAILED, "wgpuDeviceCreateRenderPipeline() failed") \
     _SG_LOGITEM_XMACRO(WGPU_ATTACHMENTS_CREATE_TEXTURE_VIEW_FAILED, "wgpuTextureCreateView() failed in create attachments") \
@@ -3810,24 +3824,24 @@ typedef struct sg_frame_stats {
     _SG_LOGITEM_XMACRO(VALIDATE_SHADERDESC_BYTECODE, "shader byte code required") \
     _SG_LOGITEM_XMACRO(VALIDATE_SHADERDESC_SOURCE_OR_BYTECODE, "shader source or byte code required") \
     _SG_LOGITEM_XMACRO(VALIDATE_SHADERDESC_NO_BYTECODE_SIZE, "shader byte code length (in bytes) required") \
-    _SG_LOGITEM_XMACRO(VALIDATE_SHADERDESC_NO_CONT_UB_MEMBERS, "uniform block members must occupy continuous slots") \
-    _SG_LOGITEM_XMACRO(VALIDATE_SHADERDESC_UB_SIZE_IS_ZERO, "bound uniform block size cannot be zero") \
-    _SG_LOGITEM_XMACRO(VALIDATE_SHADERDESC_UB_METAL_BUFFER_SLOT_OUT_OF_RANGE, "uniform block 'msl_buffer_n' is out of range (must be 0..7)") \
-    _SG_LOGITEM_XMACRO(VALIDATE_SHADERDESC_UB_METAL_BUFFER_SLOT_COLLISION, "uniform block 'msl_buffer_n' must be unique across uniform blocks and storage buffers in same shader stage") \
-    _SG_LOGITEM_XMACRO(VALIDATE_SHADERDESC_UB_HLSL_REGISTER_B_OUT_OF_RANGE, "uniform block 'hlsl_register_b_n' is out of range (must be 0..7)") \
-    _SG_LOGITEM_XMACRO(VALIDATE_SHADERDESC_UB_HLSL_REGISTER_B_COLLISION, "uniform block 'hlsl_register_b_n' must be unique across uniform blocks in same shader stage") \
-    _SG_LOGITEM_XMACRO(VALIDATE_SHADERDESC_UB_WGSL_GROUP0_BINDING_OUT_OF_RANGE, "uniform block 'wgsl_group0_binding_n' is out of range (must be 0..15)") \
-    _SG_LOGITEM_XMACRO(VALIDATE_SHADERDESC_UB_WGSL_GROUP0_BINDING_COLLISION, "uniform block 'wgsl_group0_binding_n' must be unique across all uniform blocks") \
-    _SG_LOGITEM_XMACRO(VALIDATE_SHADERDESC_NO_UB_MEMBERS, "GL backend requires uniform block member declarations") \
-    _SG_LOGITEM_XMACRO(VALIDATE_SHADERDESC_UB_UNIFORM_GLSL_NAME, "uniform block member 'glsl_name' missing") \
-    _SG_LOGITEM_XMACRO(VALIDATE_SHADERDESC_UB_SIZE_MISMATCH, "size of uniform block members doesn't match uniform block size") \
-    _SG_LOGITEM_XMACRO(VALIDATE_SHADERDESC_UB_ARRAY_COUNT, "uniform array count must be >= 1") \
-    _SG_LOGITEM_XMACRO(VALIDATE_SHADERDESC_UB_STD140_ARRAY_TYPE, "uniform arrays only allowed for FLOAT4, INT4, MAT4 in std140 layout") \
+    _SG_LOGITEM_XMACRO(VALIDATE_SHADERDESC_UNIFORMBLOCK_NO_CONT_MEMBERS, "uniform block members must occupy continuous slots") \
+    _SG_LOGITEM_XMACRO(VALIDATE_SHADERDESC_UNIFORMBLOCK_SIZE_IS_ZERO, "bound uniform block size cannot be zero") \
+    _SG_LOGITEM_XMACRO(VALIDATE_SHADERDESC_UNIFORMBLOCK_METAL_BUFFER_SLOT_OUT_OF_RANGE, "uniform block 'msl_buffer_n' is out of range (must be 0..7)") \
+    _SG_LOGITEM_XMACRO(VALIDATE_SHADERDESC_UNIFORMBLOCK_METAL_BUFFER_SLOT_COLLISION, "uniform block 'msl_buffer_n' must be unique across uniform blocks and storage buffers in same shader stage") \
+    _SG_LOGITEM_XMACRO(VALIDATE_SHADERDESC_UNIFORMBLOCK_HLSL_REGISTER_B_OUT_OF_RANGE, "uniform block 'hlsl_register_b_n' is out of range (must be 0..7)") \
+    _SG_LOGITEM_XMACRO(VALIDATE_SHADERDESC_UNIFORMBLOCK_HLSL_REGISTER_B_COLLISION, "uniform block 'hlsl_register_b_n' must be unique across uniform blocks in same shader stage") \
+    _SG_LOGITEM_XMACRO(VALIDATE_SHADERDESC_UNIFORMBLOCK_WGSL_GROUP0_BINDING_OUT_OF_RANGE, "uniform block 'wgsl_group0_binding_n' is out of range (must be 0..15)") \
+    _SG_LOGITEM_XMACRO(VALIDATE_SHADERDESC_UNIFORMBLOCK_WGSL_GROUP0_BINDING_COLLISION, "uniform block 'wgsl_group0_binding_n' must be unique across all uniform blocks") \
+    _SG_LOGITEM_XMACRO(VALIDATE_SHADERDESC_UNIFORMBLOCK_NO_MEMBERS, "GL backend requires uniform block member declarations") \
+    _SG_LOGITEM_XMACRO(VALIDATE_SHADERDESC_UNIFORMBLOCK_UNIFORM_GLSL_NAME, "uniform block member 'glsl_name' missing") \
+    _SG_LOGITEM_XMACRO(VALIDATE_SHADERDESC_UNIFORMBLOCK_SIZE_MISMATCH, "size of uniform block members doesn't match uniform block size") \
+    _SG_LOGITEM_XMACRO(VALIDATE_SHADERDESC_UNIFORMBLOCK_ARRAY_COUNT, "uniform array count must be >= 1") \
+    _SG_LOGITEM_XMACRO(VALIDATE_SHADERDESC_UNIFORMBLOCK_STD140_ARRAY_TYPE, "uniform arrays only allowed for FLOAT4, INT4, MAT4 in std140 layout") \
     _SG_LOGITEM_XMACRO(VALIDATE_SHADERDESC_STORAGEBUFFER_METAL_BUFFER_SLOT_OUT_OF_RANGE, "storage buffer 'msl_buffer_n' is out of range (must be 8..15)") \
     _SG_LOGITEM_XMACRO(VALIDATE_SHADERDESC_STORAGEBUFFER_METAL_BUFFER_SLOT_COLLISION, "storage buffer 'msl_buffer_n' must be unique across uniform blocks and storage buffer in same shader stage") \
     _SG_LOGITEM_XMACRO(VALIDATE_SHADERDESC_STORAGEBUFFER_HLSL_REGISTER_T_OUT_OF_RANGE, "storage buffer 'hlsl_register_t_n' is out of range (must be 0..23)") \
     _SG_LOGITEM_XMACRO(VALIDATE_SHADERDESC_STORAGEBUFFER_HLSL_REGISTER_T_COLLISION, "storage_buffer 'hlsl_register_t_n' must be unique across storage buffers and images in same shader stage") \
-    _SG_LOGITEM_XMACRO(VALIDATE_SHADERDESC_STORAGEBUFFER_GLSL_BINDING_OUT_OF_RANGE, "storage buffer 'glsl_binding_n' is out of range (must be 0..15)") \
+    _SG_LOGITEM_XMACRO(VALIDATE_SHADERDESC_STORAGEBUFFER_GLSL_BINDING_OUT_OF_RANGE, "storage buffer 'glsl_binding_n' is out of range (must be 0..7)") \
     _SG_LOGITEM_XMACRO(VALIDATE_SHADERDESC_STORAGEBUFFER_GLSL_BINDING_COLLISION, "storage buffer 'glsl_binding_n' must be unique across shader stages") \
     _SG_LOGITEM_XMACRO(VALIDATE_SHADERDESC_STORAGEBUFFER_WGSL_GROUP1_BINDING_OUT_OF_RANGE, "storage buffer 'wgsl_group1_binding_n' is out of range (must be 0..127)") \
     _SG_LOGITEM_XMACRO(VALIDATE_SHADERDESC_STORAGEBUFFER_WGSL_GROUP1_BINDING_COLLISION, "storage buffer 'wgsl_group1_binding_n' must be unique across all images, samplers and storage buffers") \
@@ -3859,6 +3873,7 @@ typedef struct sg_frame_stats {
     _SG_LOGITEM_XMACRO(VALIDATE_PIPELINEDESC_NO_CONT_ATTRS, "sg_pipeline_desc.layout.attrs is not continuous") \
     _SG_LOGITEM_XMACRO(VALIDATE_PIPELINEDESC_LAYOUT_STRIDE4, "sg_pipeline_desc.layout.buffers[].stride must be multiple of 4") \
     _SG_LOGITEM_XMACRO(VALIDATE_PIPELINEDESC_ATTR_SEMANTICS, "D3D11 missing vertex attribute semantics in shader") \
+    _SG_LOGITEM_XMACRO(VALIDATE_PIPELINEDESC_BLENDOP_MINMAX_REQUIRES_BLENDFACTOR_ONE, "SG_BLENDOP_MIN/MAX requires all blend factors to be SG_BLENDFACTOR_ONE") \
     _SG_LOGITEM_XMACRO(VALIDATE_ATTACHMENTSDESC_CANARY, "sg_attachments_desc not initialized") \
     _SG_LOGITEM_XMACRO(VALIDATE_ATTACHMENTSDESC_NO_ATTACHMENTS, "sg_attachments_desc no color or depth-stencil attachments") \
     _SG_LOGITEM_XMACRO(VALIDATE_ATTACHMENTSDESC_NO_CONT_COLOR_ATTS, "color attachments must occupy continuous slots") \
@@ -3963,7 +3978,7 @@ typedef struct sg_frame_stats {
     _SG_LOGITEM_XMACRO(VALIDATE_ABND_STORAGEBUFFER_EXISTS, "sg_apply_bindings: bound storage buffer no longer alive") \
     _SG_LOGITEM_XMACRO(VALIDATE_ABND_STORAGEBUFFER_BINDING_BUFFERTYPE, "sg_apply_bindings: buffer bound storage buffer slot is not of type storage buffer") \
     _SG_LOGITEM_XMACRO(VALIDATE_AUB_NO_PIPELINE, "sg_apply_uniforms: must be called after sg_apply_pipeline()") \
-    _SG_LOGITEM_XMACRO(VALIDATE_AUB_NO_UB_AT_SLOT, "sg_apply_uniforms: no uniform block declaration at this shader stage UB slot") \
+    _SG_LOGITEM_XMACRO(VALIDATE_AUB_NO_UNIFORMBLOCK_AT_SLOT, "sg_apply_uniforms: no uniform block declaration at this shader stage UB slot") \
     _SG_LOGITEM_XMACRO(VALIDATE_AUB_SIZE, "sg_apply_uniforms: data size doesn't match declared uniform block size") \
     _SG_LOGITEM_XMACRO(VALIDATE_UPDATEBUF_USAGE, "sg_update_buffer: cannot update immutable buffer") \
     _SG_LOGITEM_XMACRO(VALIDATE_UPDATEBUF_SIZE, "sg_update_buffer: update size is bigger than buffer size") \
@@ -4249,6 +4264,18 @@ SOKOL_GFX_API_DECL sg_sampler_desc sg_query_sampler_defaults(const sg_sampler_de
 SOKOL_GFX_API_DECL sg_shader_desc sg_query_shader_defaults(const sg_shader_desc* desc);
 SOKOL_GFX_API_DECL sg_pipeline_desc sg_query_pipeline_defaults(const sg_pipeline_desc* desc);
 SOKOL_GFX_API_DECL sg_attachments_desc sg_query_attachments_defaults(const sg_attachments_desc* desc);
+// assorted query functions
+SOKOL_GFX_API_DECL size_t sg_query_buffer_size(sg_buffer buf);
+SOKOL_GFX_API_DECL sg_buffer_type sg_query_buffer_type(sg_buffer buf);
+SOKOL_GFX_API_DECL sg_usage sg_query_buffer_usage(sg_buffer buf);
+SOKOL_GFX_API_DECL sg_image_type sg_query_image_type(sg_image img);
+SOKOL_GFX_API_DECL int sg_query_image_width(sg_image img);
+SOKOL_GFX_API_DECL int sg_query_image_height(sg_image img);
+SOKOL_GFX_API_DECL int sg_query_image_num_slices(sg_image img);
+SOKOL_GFX_API_DECL int sg_query_image_num_mipmaps(sg_image img);
+SOKOL_GFX_API_DECL sg_pixel_format sg_query_image_pixelformat(sg_image img);
+SOKOL_GFX_API_DECL sg_usage sg_query_image_usage(sg_image img);
+SOKOL_GFX_API_DECL int sg_query_image_sample_count(sg_image img);
 
 // separate resource allocation and initialization (for async setup)
 SOKOL_GFX_API_DECL sg_buffer sg_alloc_buffer(void);
@@ -4931,6 +4958,8 @@ inline int sg_append_buffer(sg_buffer buf_id, const sg_range& data) { return sg_
         #define GL_MINOR_VERSION 0x821C
         #define GL_TEXTURE_2D_MULTISAMPLE 0x9100
         #define GL_TEXTURE_2D_MULTISAMPLE_ARRAY 0x9102
+        #define GL_MIN 0x8007
+        #define GL_MAX 0x8008
     #endif
 
     #ifndef GL_UNSIGNED_INT_2_10_10_10_REV
@@ -4980,18 +5009,6 @@ inline int sg_append_buffer(sg_buffer buf_id, const sg_range& data) { return sg_
     #endif
     #ifndef GL_COMPRESSED_RGB_BPTC_UNSIGNED_FLOAT_ARB
     #define GL_COMPRESSED_RGB_BPTC_UNSIGNED_FLOAT_ARB 0x8E8F
-    #endif
-    #ifndef GL_COMPRESSED_RGB_PVRTC_2BPPV1_IMG
-    #define GL_COMPRESSED_RGB_PVRTC_2BPPV1_IMG 0x8C01
-    #endif
-    #ifndef GL_COMPRESSED_RGB_PVRTC_4BPPV1_IMG
-    #define GL_COMPRESSED_RGB_PVRTC_4BPPV1_IMG 0x8C00
-    #endif
-    #ifndef GL_COMPRESSED_RGBA_PVRTC_2BPPV1_IMG
-    #define GL_COMPRESSED_RGBA_PVRTC_2BPPV1_IMG 0x8C03
-    #endif
-    #ifndef GL_COMPRESSED_RGBA_PVRTC_4BPPV1_IMG
-    #define GL_COMPRESSED_RGBA_PVRTC_4BPPV1_IMG 0x8C02
     #endif
     #ifndef GL_COMPRESSED_RGB8_ETC2
     #define GL_COMPRESSED_RGB8_ETC2 0x9274
@@ -5553,7 +5570,7 @@ typedef struct {
     GLuint sampler;
 } _sg_gl_cache_texture_sampler_bind_slot;
 
-#define _SG_GL_MAX_SBUF_BINDINGS (2 * SG_MAX_STORAGEBUFFER_BINDSLOTS)
+#define _SG_GL_MAX_SBUF_BINDINGS (SG_MAX_STORAGEBUFFER_BINDSLOTS)
 #define _SG_GL_MAX_IMG_SMP_BINDINGS (SG_MAX_IMAGE_SAMPLER_PAIRS)
 typedef struct {
     sg_depth_state depth;
@@ -6406,10 +6423,6 @@ _SOKOL_PRIVATE bool _sg_is_compressed_pixel_format(sg_pixel_format fmt) {
         case SG_PIXELFORMAT_BC6H_RGBUF:
         case SG_PIXELFORMAT_BC7_RGBA:
         case SG_PIXELFORMAT_BC7_SRGBA:
-        case SG_PIXELFORMAT_PVRTC_RGB_2BPP:
-        case SG_PIXELFORMAT_PVRTC_RGB_4BPP:
-        case SG_PIXELFORMAT_PVRTC_RGBA_2BPP:
-        case SG_PIXELFORMAT_PVRTC_RGBA_4BPP:
         case SG_PIXELFORMAT_ETC2_RGB8:
         case SG_PIXELFORMAT_ETC2_SRGB8:
         case SG_PIXELFORMAT_ETC2_RGB8A1:
@@ -6523,19 +6536,6 @@ _SOKOL_PRIVATE bool _sg_multiple_u64(uint64_t val, uint64_t of) {
 /* return row pitch for an image
 
     see ComputePitch in https://github.com/microsoft/DirectXTex/blob/master/DirectXTex/DirectXTexUtil.cpp
-
-    For the special PVRTC pitch computation, see:
-    GL extension requirement (https://www.khronos.org/registry/OpenGL/extensions/IMG/IMG_texture_compression_pvrtc.txt)
-
-    Quote:
-
-    6) How is the imageSize argument calculated for the CompressedTexImage2D
-       and CompressedTexSubImage2D functions.
-
-       Resolution: For PVRTC 4BPP formats the imageSize is calculated as:
-          ( max(width, 8) * max(height, 8) * 4 + 7) / 8
-       For PVRTC 2BPP formats the imageSize is calculated as:
-          ( max(width, 16) * max(height, 8) * 2 + 7) / 8
 */
 _SOKOL_PRIVATE int _sg_row_pitch(sg_pixel_format fmt, int width, int row_align) {
     int pitch;
@@ -6568,14 +6568,6 @@ _SOKOL_PRIVATE int _sg_row_pitch(sg_pixel_format fmt, int width, int row_align) 
         case SG_PIXELFORMAT_ASTC_4x4_SRGBA:
             pitch = ((width + 3) / 4) * 16;
             pitch = pitch < 16 ? 16 : pitch;
-            break;
-        case SG_PIXELFORMAT_PVRTC_RGB_4BPP:
-        case SG_PIXELFORMAT_PVRTC_RGBA_4BPP:
-            pitch = (_sg_max(width, 8) * 4 + 7) / 8;
-            break;
-        case SG_PIXELFORMAT_PVRTC_RGB_2BPP:
-        case SG_PIXELFORMAT_PVRTC_RGBA_2BPP:
-            pitch = (_sg_max(width, 16) * 2 + 7) / 8;
             break;
         default:
             pitch = width * _sg_pixelformat_bytesize(fmt);
@@ -6613,18 +6605,6 @@ _SOKOL_PRIVATE int _sg_num_rows(sg_pixel_format fmt, int height) {
         case SG_PIXELFORMAT_ASTC_4x4_RGBA:
         case SG_PIXELFORMAT_ASTC_4x4_SRGBA:
             num_rows = ((height + 3) / 4);
-            break;
-        case SG_PIXELFORMAT_PVRTC_RGB_4BPP:
-        case SG_PIXELFORMAT_PVRTC_RGBA_4BPP:
-        case SG_PIXELFORMAT_PVRTC_RGB_2BPP:
-        case SG_PIXELFORMAT_PVRTC_RGBA_2BPP:
-            /* NOTE: this is most likely not correct because it ignores any
-                PVCRTC block size, but multiplied with _sg_row_pitch()
-                it gives the correct surface pitch.
-
-                See: https://www.khronos.org/registry/OpenGL/extensions/IMG/IMG_texture_compression_pvrtc.txt
-            */
-            num_rows = ((_sg_max(height, 8) + 7) / 8) * 8;
             break;
         default:
             num_rows = height;
@@ -7338,6 +7318,8 @@ _SOKOL_PRIVATE GLenum _sg_gl_blend_op(sg_blend_op op) {
         case SG_BLENDOP_ADD:                return GL_FUNC_ADD;
         case SG_BLENDOP_SUBTRACT:           return GL_FUNC_SUBTRACT;
         case SG_BLENDOP_REVERSE_SUBTRACT:   return GL_FUNC_REVERSE_SUBTRACT;
+        case SG_BLENDOP_MIN:                return GL_MIN;
+        case SG_BLENDOP_MAX:                return GL_MAX;
         default: SOKOL_UNREACHABLE; return 0;
     }
 }
@@ -7522,14 +7504,6 @@ _SOKOL_PRIVATE GLenum _sg_gl_teximage_format(sg_pixel_format fmt) {
             return GL_COMPRESSED_RGBA_BPTC_UNORM_ARB;
         case SG_PIXELFORMAT_BC7_SRGBA:
             return GL_COMPRESSED_SRGB_ALPHA_BPTC_UNORM_ARB;
-        case SG_PIXELFORMAT_PVRTC_RGB_2BPP:
-            return GL_COMPRESSED_RGB_PVRTC_2BPPV1_IMG;
-        case SG_PIXELFORMAT_PVRTC_RGB_4BPP:
-            return GL_COMPRESSED_RGB_PVRTC_4BPPV1_IMG;
-        case SG_PIXELFORMAT_PVRTC_RGBA_2BPP:
-            return GL_COMPRESSED_RGBA_PVRTC_2BPPV1_IMG;
-        case SG_PIXELFORMAT_PVRTC_RGBA_4BPP:
-            return GL_COMPRESSED_RGBA_PVRTC_4BPPV1_IMG;
         case SG_PIXELFORMAT_ETC2_RGB8:
             return GL_COMPRESSED_RGB8_ETC2;
         case SG_PIXELFORMAT_ETC2_SRGB8:
@@ -7619,10 +7593,6 @@ _SOKOL_PRIVATE GLenum _sg_gl_teximage_internal_format(sg_pixel_format fmt) {
         case SG_PIXELFORMAT_BC6H_RGBUF:         return GL_COMPRESSED_RGB_BPTC_UNSIGNED_FLOAT_ARB;
         case SG_PIXELFORMAT_BC7_RGBA:           return GL_COMPRESSED_RGBA_BPTC_UNORM_ARB;
         case SG_PIXELFORMAT_BC7_SRGBA:          return GL_COMPRESSED_SRGB_ALPHA_BPTC_UNORM_ARB;
-        case SG_PIXELFORMAT_PVRTC_RGB_2BPP:     return GL_COMPRESSED_RGB_PVRTC_2BPPV1_IMG;
-        case SG_PIXELFORMAT_PVRTC_RGB_4BPP:     return GL_COMPRESSED_RGB_PVRTC_4BPPV1_IMG;
-        case SG_PIXELFORMAT_PVRTC_RGBA_2BPP:    return GL_COMPRESSED_RGBA_PVRTC_2BPPV1_IMG;
-        case SG_PIXELFORMAT_PVRTC_RGBA_4BPP:    return GL_COMPRESSED_RGBA_PVRTC_4BPPV1_IMG;
         case SG_PIXELFORMAT_ETC2_RGB8:          return GL_COMPRESSED_RGB8_ETC2;
         case SG_PIXELFORMAT_ETC2_SRGB8:         return GL_COMPRESSED_SRGB8_ETC2;
         case SG_PIXELFORMAT_ETC2_RGB8A1:        return GL_COMPRESSED_RGB8_PUNCHTHROUGH_ALPHA1_ETC2;
@@ -7766,13 +7736,6 @@ _SOKOL_PRIVATE void _sg_gl_init_pixelformats_bptc(void) {
     _sg_pixelformat_sf(&_sg.formats[SG_PIXELFORMAT_BC7_SRGBA]);
 }
 
-_SOKOL_PRIVATE void _sg_gl_init_pixelformats_pvrtc(void) {
-    _sg_pixelformat_sf(&_sg.formats[SG_PIXELFORMAT_PVRTC_RGB_2BPP]);
-    _sg_pixelformat_sf(&_sg.formats[SG_PIXELFORMAT_PVRTC_RGB_4BPP]);
-    _sg_pixelformat_sf(&_sg.formats[SG_PIXELFORMAT_PVRTC_RGBA_2BPP]);
-    _sg_pixelformat_sf(&_sg.formats[SG_PIXELFORMAT_PVRTC_RGBA_4BPP]);
-}
-
 _SOKOL_PRIVATE void _sg_gl_init_pixelformats_etc2(void) {
     _sg_pixelformat_sf(&_sg.formats[SG_PIXELFORMAT_ETC2_RGB8]);
     _sg_pixelformat_sf(&_sg.formats[SG_PIXELFORMAT_ETC2_SRGB8]);
@@ -7851,7 +7814,6 @@ _SOKOL_PRIVATE void _sg_gl_init_caps_glcore(void) {
     bool has_s3tc = false;  // BC1..BC3
     bool has_rgtc = false;  // BC4 and BC5
     bool has_bptc = false;  // BC6H and BC7
-    bool has_pvrtc = false;
     bool has_etc2 = false;
     bool has_astc = false;
     GLint num_ext = 0;
@@ -7865,8 +7827,6 @@ _SOKOL_PRIVATE void _sg_gl_init_caps_glcore(void) {
                 has_rgtc = true;
             } else if (strstr(ext, "_texture_compression_bptc")) {
                 has_bptc = true;
-            } else if (strstr(ext, "_texture_compression_pvrtc")) {
-                has_pvrtc = true;
             } else if (strstr(ext, "_ES3_compatibility")) {
                 has_etc2 = true;
             } else if (strstr(ext, "_texture_filter_anisotropic")) {
@@ -7898,9 +7858,6 @@ _SOKOL_PRIVATE void _sg_gl_init_caps_glcore(void) {
     if (has_bptc) {
         _sg_gl_init_pixelformats_bptc();
     }
-    if (has_pvrtc) {
-        _sg_gl_init_pixelformats_pvrtc();
-    }
     if (has_etc2) {
         _sg_gl_init_pixelformats_etc2();
     }
@@ -7924,7 +7881,6 @@ _SOKOL_PRIVATE void _sg_gl_init_caps_gles3(void) {
     bool has_s3tc = false;  // BC1..BC3
     bool has_rgtc = false;  // BC4 and BC5
     bool has_bptc = false;  // BC6H and BC7
-    bool has_pvrtc = false;
     #if defined(__EMSCRIPTEN__)
         bool has_etc2 = false;
     #else
@@ -7948,10 +7904,6 @@ _SOKOL_PRIVATE void _sg_gl_init_caps_gles3(void) {
                 has_rgtc = true;
             } else if (strstr(ext, "_texture_compression_bptc")) {
                 has_bptc = true;
-            } else if (strstr(ext, "_texture_compression_pvrtc")) {
-                has_pvrtc = true;
-            } else if (strstr(ext, "_compressed_texture_pvrtc")) {
-                has_pvrtc = true;
             } else if (strstr(ext, "_compressed_texture_etc")) {
                 has_etc2 = true;
             } else if (strstr(ext, "_compressed_texture_astc")) {
@@ -7995,9 +7947,6 @@ _SOKOL_PRIVATE void _sg_gl_init_caps_gles3(void) {
     }
     if (has_bptc) {
         _sg_gl_init_pixelformats_bptc();
-    }
-    if (has_pvrtc) {
-        _sg_gl_init_pixelformats_pvrtc();
     }
     if (has_etc2) {
         _sg_gl_init_pixelformats_etc2();
@@ -8691,10 +8640,28 @@ _SOKOL_PRIVATE GLuint _sg_gl_compile_shader(sg_shader_stage stage, const char* s
     return gl_shd;
 }
 
+// NOTE: this is an out-of-range check for GLSL bindslots that's also active in release mode
+_SOKOL_PRIVATE bool _sg_gl_ensure_glsl_bindslot_ranges(const sg_shader_desc* desc) {
+    SOKOL_ASSERT(desc);
+    for (size_t i = 0; i < SG_MAX_STORAGEBUFFER_BINDSLOTS; i++) {
+        if (desc->storage_buffers[i].glsl_binding_n >= _SG_GL_MAX_SBUF_BINDINGS) {
+            _SG_ERROR(GL_STORAGEBUFFER_GLSL_BINDING_OUT_OF_RANGE);
+            return false;
+        }
+    }
+    return true;
+}
+
 _SOKOL_PRIVATE sg_resource_state _sg_gl_create_shader(_sg_shader_t* shd, const sg_shader_desc* desc) {
     SOKOL_ASSERT(shd && desc);
     SOKOL_ASSERT(!shd->gl.prog);
     _SG_GL_CHECK_ERROR();
+
+    // perform a fatal range-check on GLSL bindslots that's also active
+    // in release mode to avoid potential out-of-bounds array accesses
+    if (!_sg_gl_ensure_glsl_bindslot_ranges(desc)) {
+        return SG_RESOURCESTATE_FAILED;
+    }
 
     // copy the optional vertex attribute names over
     for (int i = 0; i < SG_MAX_VERTEX_ATTRIBUTES; i++) {
@@ -8756,6 +8723,10 @@ _SOKOL_PRIVATE sg_resource_state _sg_gl_create_shader(_sg_shader_t* shd, const s
             u->offset = (uint16_t) cur_uniform_offset;
             SOKOL_ASSERT(u_desc->glsl_name);
             u->gl_loc = glGetUniformLocation(gl_prog, u_desc->glsl_name);
+            if (u->gl_loc == -1) {
+                _SG_WARN(GL_UNIFORMBLOCK_NAME_NOT_FOUND_IN_SHADER);
+                _SG_LOGMSG(GL_UNIFORMBLOCK_NAME_NOT_FOUND_IN_SHADER, u_desc->glsl_name);
+            }
             cur_uniform_offset += u_size;
             ub->num_uniforms++;
         }
@@ -8794,7 +8765,7 @@ _SOKOL_PRIVATE sg_resource_state _sg_gl_create_shader(_sg_shader_t* shd, const s
             shd->gl.tex_slot[img_smp_index] = (int8_t)gl_tex_slot++;
         } else {
             shd->gl.tex_slot[img_smp_index] = -1;
-            _SG_ERROR(GL_IMAGE_SAMPLER_NAME_NOT_FOUND_IN_SHADER);
+            _SG_WARN(GL_IMAGE_SAMPLER_NAME_NOT_FOUND_IN_SHADER);
             _SG_LOGMSG(GL_IMAGE_SAMPLER_NAME_NOT_FOUND_IN_SHADER, img_smp_desc->glsl_name);
         }
     }
@@ -10493,6 +10464,8 @@ _SOKOL_PRIVATE D3D11_BLEND_OP _sg_d3d11_blend_op(sg_blend_op op) {
         case SG_BLENDOP_ADD:                return D3D11_BLEND_OP_ADD;
         case SG_BLENDOP_SUBTRACT:           return D3D11_BLEND_OP_SUBTRACT;
         case SG_BLENDOP_REVERSE_SUBTRACT:   return D3D11_BLEND_OP_REV_SUBTRACT;
+        case SG_BLENDOP_MIN:                return D3D11_BLEND_OP_MIN;
+        case SG_BLENDOP_MAX:                return D3D11_BLEND_OP_MAX;
         default: SOKOL_UNREACHABLE; return (D3D11_BLEND_OP) 0;
     }
 }
@@ -10555,8 +10528,13 @@ _SOKOL_PRIVATE void _sg_d3d11_init_caps(void) {
         info->sample = 0 != (srv_dxgi_fmt_caps & D3D11_FORMAT_SUPPORT_TEXTURE2D);
         info->filter = 0 != (srv_dxgi_fmt_caps & D3D11_FORMAT_SUPPORT_SHADER_SAMPLE);
         info->render = render || depth;
-        info->blend  = 0 != (rtv_dxgi_fmt_caps & D3D11_FORMAT_SUPPORT_BLENDABLE);
-        info->msaa   = 0 != (rtv_dxgi_fmt_caps & D3D11_FORMAT_SUPPORT_MULTISAMPLE_RENDERTARGET);
+        if (depth) {
+            info->blend = 0 != (dsv_dxgi_fmt_caps & D3D11_FORMAT_SUPPORT_BLENDABLE);
+            info->msaa  = 0 != (dsv_dxgi_fmt_caps & D3D11_FORMAT_SUPPORT_MULTISAMPLE_RENDERTARGET);
+        } else {
+            info->blend = 0 != (rtv_dxgi_fmt_caps & D3D11_FORMAT_SUPPORT_BLENDABLE);
+            info->msaa  = 0 != (rtv_dxgi_fmt_caps & D3D11_FORMAT_SUPPORT_MULTISAMPLE_RENDERTARGET);
+        }
         info->depth  = depth;
     }
 }
@@ -10960,10 +10938,46 @@ _SOKOL_PRIVATE ID3DBlob* _sg_d3d11_compile_shader(const sg_shader_function* shd_
     return output;
 }
 
+// NOTE: this is an out-of-range check for HLSL bindslots that's also active in release mode
+_SOKOL_PRIVATE bool _sg_d3d11_ensure_hlsl_bindslot_ranges(const sg_shader_desc* desc) {
+    SOKOL_ASSERT(desc);
+    for (size_t i = 0; i < SG_MAX_UNIFORMBLOCK_BINDSLOTS; i++) {
+        if (desc->uniform_blocks[i].hlsl_register_b_n >= _SG_D3D11_MAX_STAGE_UB_BINDINGS) {
+            _SG_ERROR(D3D11_UNIFORMBLOCK_HLSL_REGISTER_B_OUT_OF_RANGE);
+            return false;
+        }
+    }
+    for (size_t i = 0; i < SG_MAX_STORAGEBUFFER_BINDSLOTS; i++) {
+        if (desc->storage_buffers[i].hlsl_register_t_n >= _SG_D3D11_MAX_STAGE_TEX_SBUF_BINDINGS) {
+            _SG_ERROR(D3D11_STORAGEBUFFER_HLSL_REGISTER_T_OUT_OF_RANGE);
+            return false;
+        }
+    }
+    for (size_t i = 0; i < SG_MAX_IMAGE_BINDSLOTS; i++) {
+        if (desc->images[i].hlsl_register_t_n >= _SG_D3D11_MAX_STAGE_TEX_SBUF_BINDINGS) {
+            _SG_ERROR(D3D11_IMAGE_HLSL_REGISTER_T_OUT_OF_RANGE);
+            return false;
+        }
+    }
+    for (size_t i = 0; i < SG_MAX_SAMPLER_BINDSLOTS; i++) {
+        if (desc->samplers[i].hlsl_register_s_n >= _SG_D3D11_MAX_STAGE_SMP_BINDINGS) {
+            _SG_ERROR(D3D11_SAMPLER_HLSL_REGISTER_S_OUT_OF_RANGE);
+            return false;
+        }
+    }
+    return true;
+}
+
 _SOKOL_PRIVATE sg_resource_state _sg_d3d11_create_shader(_sg_shader_t* shd, const sg_shader_desc* desc) {
     SOKOL_ASSERT(shd && desc);
     SOKOL_ASSERT(!shd->d3d11.vs && !shd->d3d11.fs && !shd->d3d11.vs_blob);
     HRESULT hr;
+
+    // perform a range-check on HLSL bindslots that's also active in release
+    // mode to avoid potential out-of-bounds array accesses
+    if (!_sg_d3d11_ensure_hlsl_bindslot_ranges(desc)) {
+        return SG_RESOURCESTATE_FAILED;
+    }
 
     // copy vertex attribute semantic names and indices
     for (size_t i = 0; i < SG_MAX_VERTEX_ATTRIBUTES; i++) {
@@ -11968,10 +11982,6 @@ _SOKOL_PRIVATE MTLPixelFormat _sg_mtl_pixel_format(sg_pixel_format fmt) {
         case SG_PIXELFORMAT_BC7_RGBA:               return MTLPixelFormatBC7_RGBAUnorm;
         case SG_PIXELFORMAT_BC7_SRGBA:              return MTLPixelFormatBC7_RGBAUnorm_sRGB;
         #else
-        case SG_PIXELFORMAT_PVRTC_RGB_2BPP:         return MTLPixelFormatPVRTC_RGB_2BPP;
-        case SG_PIXELFORMAT_PVRTC_RGB_4BPP:         return MTLPixelFormatPVRTC_RGB_4BPP;
-        case SG_PIXELFORMAT_PVRTC_RGBA_2BPP:        return MTLPixelFormatPVRTC_RGBA_2BPP;
-        case SG_PIXELFORMAT_PVRTC_RGBA_4BPP:        return MTLPixelFormatPVRTC_RGBA_4BPP;
         case SG_PIXELFORMAT_ETC2_RGB8:              return MTLPixelFormatETC2_RGB8;
         case SG_PIXELFORMAT_ETC2_SRGB8:             return MTLPixelFormatETC2_RGB8_sRGB;
         case SG_PIXELFORMAT_ETC2_RGB8A1:            return MTLPixelFormatETC2_RGB8A1;
@@ -12010,6 +12020,8 @@ _SOKOL_PRIVATE MTLBlendOperation _sg_mtl_blend_op(sg_blend_op op) {
         case SG_BLENDOP_ADD:                return MTLBlendOperationAdd;
         case SG_BLENDOP_SUBTRACT:           return MTLBlendOperationSubtract;
         case SG_BLENDOP_REVERSE_SUBTRACT:   return MTLBlendOperationReverseSubtract;
+        case SG_BLENDOP_MIN:                return MTLBlendOperationMin;
+        case SG_BLENDOP_MAX:                return MTLBlendOperationMax;
         default: SOKOL_UNREACHABLE; return (MTLBlendOperation)0;
     }
 }
@@ -12104,18 +12116,6 @@ _SOKOL_PRIVATE MTLTextureType _sg_mtl_texture_type(sg_image_type t) {
         case SG_IMAGETYPE_3D:       return MTLTextureType3D;
         case SG_IMAGETYPE_ARRAY:    return MTLTextureType2DArray;
         default: SOKOL_UNREACHABLE; return (MTLTextureType)0;
-    }
-}
-
-_SOKOL_PRIVATE bool _sg_mtl_is_pvrtc(sg_pixel_format fmt) {
-    switch (fmt) {
-        case SG_PIXELFORMAT_PVRTC_RGB_2BPP:
-        case SG_PIXELFORMAT_PVRTC_RGB_4BPP:
-        case SG_PIXELFORMAT_PVRTC_RGBA_2BPP:
-        case SG_PIXELFORMAT_PVRTC_RGBA_4BPP:
-            return true;
-        default:
-            return false;
     }
 }
 
@@ -12444,10 +12444,6 @@ _SOKOL_PRIVATE void _sg_mtl_init_caps(void) {
         _sg_pixelformat_sf(&_sg.formats[SG_PIXELFORMAT_BC7_RGBA]);
         _sg_pixelformat_sf(&_sg.formats[SG_PIXELFORMAT_BC7_SRGBA]);
     #else
-        _sg_pixelformat_sf(&_sg.formats[SG_PIXELFORMAT_PVRTC_RGB_2BPP]);
-        _sg_pixelformat_sf(&_sg.formats[SG_PIXELFORMAT_PVRTC_RGB_4BPP]);
-        _sg_pixelformat_sf(&_sg.formats[SG_PIXELFORMAT_PVRTC_RGBA_2BPP]);
-        _sg_pixelformat_sf(&_sg.formats[SG_PIXELFORMAT_PVRTC_RGBA_4BPP]);
         _sg_pixelformat_sf(&_sg.formats[SG_PIXELFORMAT_ETC2_RGB8]);
         _sg_pixelformat_sf(&_sg.formats[SG_PIXELFORMAT_ETC2_SRGB8]);
         _sg_pixelformat_sf(&_sg.formats[SG_PIXELFORMAT_ETC2_RGB8A1]);
@@ -12587,13 +12583,8 @@ _SOKOL_PRIVATE void _sg_mtl_copy_image_data(const _sg_image_t* img, __unsafe_unr
             const uint8_t* data_ptr = (const uint8_t*)data->subimage[face_index][mip_index].ptr;
             const int mip_width = _sg_miplevel_dim(img->cmn.width, mip_index);
             const int mip_height = _sg_miplevel_dim(img->cmn.height, mip_index);
-            // special case PVRTC formats: bytePerRow and bytesPerImage must be 0
-            int bytes_per_row = 0;
-            int bytes_per_slice = 0;
-            if (!_sg_mtl_is_pvrtc(img->cmn.pixel_format)) {
-                bytes_per_row = _sg_row_pitch(img->cmn.pixel_format, mip_width, 1);
-                bytes_per_slice = _sg_surface_pitch(img->cmn.pixel_format, mip_width, mip_height, 1);
-            }
+            int bytes_per_row = _sg_row_pitch(img->cmn.pixel_format, mip_width, 1);
+            int bytes_per_slice = _sg_surface_pitch(img->cmn.pixel_format, mip_width, mip_height, 1);
             /* bytesPerImage special case: https://developer.apple.com/documentation/metal/mtltexture/1515679-replaceregion
 
                 "Supply a nonzero value only when you copy data to a MTLTextureType3D type texture"
@@ -12848,8 +12839,44 @@ _SOKOL_PRIVATE void _sg_mtl_discard_shader_func(const _sg_mtl_shader_func_t* fun
     _sg_mtl_release_resource(_sg.frame_index, func->mtl_lib);
 }
 
+// NOTE: this is an out-of-range check for MSL bindslots that's also active in release mode
+_SOKOL_PRIVATE bool _sg_mtl_ensure_msl_bindslot_ranges(const sg_shader_desc* desc) {
+    SOKOL_ASSERT(desc);
+    for (size_t i = 0; i < SG_MAX_UNIFORMBLOCK_BINDSLOTS; i++) {
+        if (desc->uniform_blocks[i].msl_buffer_n >= _SG_MTL_MAX_STAGE_UB_BINDINGS) {
+            _SG_ERROR(METAL_UNIFORMBLOCK_MSL_BUFFER_SLOT_OUT_OF_RANGE);
+            return false;
+        }
+    }
+    for (size_t i = 0; i < SG_MAX_STORAGEBUFFER_BINDSLOTS; i++) {
+        if (desc->storage_buffers[i].msl_buffer_n >= _SG_MTL_MAX_STAGE_UB_SBUF_BINDINGS) {
+            _SG_ERROR(METAL_STORAGEBUFFER_MSL_BUFFER_SLOT_OUT_OF_RANGE);
+            return false;
+        }
+    }
+    for (size_t i = 0; i < SG_MAX_IMAGE_BINDSLOTS; i++) {
+        if (desc->images[i].msl_texture_n >= _SG_MTL_MAX_STAGE_IMAGE_BINDINGS) {
+            _SG_ERROR(METAL_IMAGE_MSL_TEXTURE_SLOT_OUT_OF_RANGE);
+            return false;
+        }
+    }
+    for (size_t i = 0; i < SG_MAX_SAMPLER_BINDSLOTS; i++) {
+        if (desc->samplers[i].msl_sampler_n >= _SG_MTL_MAX_STAGE_SAMPLER_BINDINGS) {
+            _SG_ERROR(METAL_SAMPLER_MSL_SAMPLER_SLOT_OUT_OF_RANGE);
+            return false;
+        }
+    }
+    return true;
+}
+
 _SOKOL_PRIVATE sg_resource_state _sg_mtl_create_shader(_sg_shader_t* shd, const sg_shader_desc* desc) {
     SOKOL_ASSERT(shd && desc);
+
+    // do a MSL bindslot range check also in release mode, and if that fails,
+    // also fail shader creation
+    if (!_sg_mtl_ensure_msl_bindslot_ranges(desc)) {
+        return SG_RESOURCESTATE_FAILED;
+    }
 
     // copy resource bindslot mappings
     for (size_t i = 0; i < SG_MAX_UNIFORMBLOCK_BINDSLOTS; i++) {
@@ -13805,8 +13832,7 @@ _SOKOL_PRIVATE WGPUVertexFormat _sg_wgpu_vertexformat(sg_vertex_format f) {
         case SG_VERTEXFORMAT_USHORT4N:      return WGPUVertexFormat_Unorm16x4;
         case SG_VERTEXFORMAT_HALF2:         return WGPUVertexFormat_Float16x2;
         case SG_VERTEXFORMAT_HALF4:         return WGPUVertexFormat_Float16x4;
-        // FIXME! UINT10_N2 (see https://github.com/gpuweb/gpuweb/issues/4275)
-        // case SG_VERTEXFORMAT_UINT10_N2:     return WGPUVertexFormat_Undefined;
+        case SG_VERTEXFORMAT_UINT10_N2:     return WGPUVertexFormat_Unorm10_10_10_2;
         default:
             SOKOL_UNREACHABLE;
             return WGPUVertexFormat_Force32;
@@ -13911,10 +13937,6 @@ _SOKOL_PRIVATE WGPUTextureFormat _sg_wgpu_textureformat(sg_pixel_format p) {
         case SG_PIXELFORMAT_RG16SN:
         case SG_PIXELFORMAT_RGBA16:
         case SG_PIXELFORMAT_RGBA16SN:
-        case SG_PIXELFORMAT_PVRTC_RGB_2BPP:
-        case SG_PIXELFORMAT_PVRTC_RGB_4BPP:
-        case SG_PIXELFORMAT_PVRTC_RGBA_2BPP:
-        case SG_PIXELFORMAT_PVRTC_RGBA_4BPP:
             return WGPUTextureFormat_Undefined;
 
         default:
@@ -13960,6 +13982,8 @@ _SOKOL_PRIVATE WGPUBlendOperation _sg_wgpu_blendop(sg_blend_op op) {
         case SG_BLENDOP_ADD:                return WGPUBlendOperation_Add;
         case SG_BLENDOP_SUBTRACT:           return WGPUBlendOperation_Subtract;
         case SG_BLENDOP_REVERSE_SUBTRACT:   return WGPUBlendOperation_ReverseSubtract;
+        case SG_BLENDOP_MIN:                return WGPUBlendOperation_Min;
+        case SG_BLENDOP_MAX:                return WGPUBlendOperation_Max;
         default:
             SOKOL_UNREACHABLE;
             return WGPUBlendOperation_Force32;
@@ -15004,6 +15028,36 @@ _SOKOL_PRIVATE int _sg_wgpu_dynoffset_cmp(const void* a, const void* b) {
     return 0;
 }
 
+// NOTE: this is an out-of-range check for WGSL bindslots that's also active in release mode
+_SOKOL_PRIVATE bool _sg_wgpu_ensure_wgsl_bindslot_ranges(const sg_shader_desc* desc) {
+    SOKOL_ASSERT(desc);
+    for (size_t i = 0; i < SG_MAX_UNIFORMBLOCK_BINDSLOTS; i++) {
+        if (desc->uniform_blocks[i].wgsl_group0_binding_n >= _SG_WGPU_MAX_UB_BINDGROUP_BIND_SLOTS) {
+            _SG_ERROR(WGPU_UNIFORMBLOCK_WGSL_GROUP0_BINDING_OUT_OF_RANGE);
+            return false;
+        }
+    }
+    for (size_t i = 0; i < SG_MAX_STORAGEBUFFER_BINDSLOTS; i++) {
+        if (desc->storage_buffers[i].wgsl_group1_binding_n >= _SG_WGPU_MAX_IMG_SMP_SBUF_BIND_SLOTS) {
+            _SG_ERROR(WGPU_STORAGEBUFFER_WGSL_GROUP1_BINDING_OUT_OF_RANGE);
+            return false;
+        }
+    }
+    for (size_t i = 0; i < SG_MAX_IMAGE_BINDSLOTS; i++) {
+        if (desc->images[i].wgsl_group1_binding_n >= _SG_WGPU_MAX_IMG_SMP_SBUF_BIND_SLOTS) {
+            _SG_ERROR(WGPU_IMAGE_WGSL_GROUP1_BINDING_OUT_OF_RANGE);
+            return false;
+        }
+    }
+    for (size_t i = 0; i < SG_MAX_SAMPLER_BINDSLOTS; i++) {
+        if (desc->samplers[i].wgsl_group1_binding_n >= _SG_WGPU_MAX_IMG_SMP_SBUF_BIND_SLOTS) {
+            _SG_ERROR(WGPU_SAMPLER_WGSL_GROUP1_BINDING_OUT_OF_RANGE);
+            return false;
+        }
+    }
+    return true;
+}
+
 _SOKOL_PRIVATE sg_resource_state _sg_wgpu_create_shader(_sg_shader_t* shd, const sg_shader_desc* desc) {
     SOKOL_ASSERT(shd && desc);
     SOKOL_ASSERT(desc->vertex_func.source && desc->fragment_func.source);
@@ -15012,6 +15066,13 @@ _SOKOL_PRIVATE sg_resource_state _sg_wgpu_create_shader(_sg_shader_t* shd, const
     SOKOL_ASSERT(shd->wgpu.bgl_ub == 0);
     SOKOL_ASSERT(shd->wgpu.bg_ub == 0);
     SOKOL_ASSERT(shd->wgpu.bgl_img_smp_sbuf == 0);
+
+    // do a release-mode bounds-check on wgsl bindslots, even though out-of-range
+    // bindslots can't cause out-of-bounds accesses in the wgpu backend, this
+    // is done to be consistent with the other backends
+    if (!_sg_wgpu_ensure_wgsl_bindslot_ranges(desc)) {
+        return SG_RESOURCESTATE_FAILED;
+    }
 
     // build shader modules
     shd->wgpu.vertex_func = _sg_wgpu_create_shader_func(&desc->vertex_func, desc->label);
@@ -16772,18 +16833,18 @@ _SOKOL_PRIVATE bool _sg_validate_shader_desc(const sg_shader_desc* desc) {
             if (ub_desc->stage == SG_SHADERSTAGE_NONE) {
                 continue;
             }
-            _SG_VALIDATE(ub_desc->size > 0, VALIDATE_SHADERDESC_UB_SIZE_IS_ZERO);
+            _SG_VALIDATE(ub_desc->size > 0, VALIDATE_SHADERDESC_UNIFORMBLOCK_SIZE_IS_ZERO);
             #if defined(SOKOL_METAL)
-            _SG_VALIDATE(ub_desc->msl_buffer_n < _SG_MTL_MAX_STAGE_UB_BINDINGS, VALIDATE_SHADERDESC_UB_METAL_BUFFER_SLOT_OUT_OF_RANGE);
-            _SG_VALIDATE(_sg_validate_slot_bits(msl_buf_bits, ub_desc->stage, ub_desc->msl_buffer_n), VALIDATE_SHADERDESC_UB_METAL_BUFFER_SLOT_COLLISION);
+            _SG_VALIDATE(ub_desc->msl_buffer_n < _SG_MTL_MAX_STAGE_UB_BINDINGS, VALIDATE_SHADERDESC_UNIFORMBLOCK_METAL_BUFFER_SLOT_OUT_OF_RANGE);
+            _SG_VALIDATE(_sg_validate_slot_bits(msl_buf_bits, ub_desc->stage, ub_desc->msl_buffer_n), VALIDATE_SHADERDESC_UNIFORMBLOCK_METAL_BUFFER_SLOT_COLLISION);
             msl_buf_bits = _sg_validate_set_slot_bit(msl_buf_bits, ub_desc->stage, ub_desc->msl_buffer_n);
             #elif defined(SOKOL_D3D11)
-            _SG_VALIDATE(ub_desc->hlsl_register_b_n < _SG_D3D11_MAX_STAGE_UB_BINDINGS, VALIDATE_SHADERDESC_UB_HLSL_REGISTER_B_OUT_OF_RANGE);
-            _SG_VALIDATE(_sg_validate_slot_bits(hlsl_buf_bits, ub_desc->stage, ub_desc->hlsl_register_b_n), VALIDATE_SHADERDESC_UB_HLSL_REGISTER_B_COLLISION);
+            _SG_VALIDATE(ub_desc->hlsl_register_b_n < _SG_D3D11_MAX_STAGE_UB_BINDINGS, VALIDATE_SHADERDESC_UNIFORMBLOCK_HLSL_REGISTER_B_OUT_OF_RANGE);
+            _SG_VALIDATE(_sg_validate_slot_bits(hlsl_buf_bits, ub_desc->stage, ub_desc->hlsl_register_b_n), VALIDATE_SHADERDESC_UNIFORMBLOCK_HLSL_REGISTER_B_COLLISION);
             hlsl_buf_bits = _sg_validate_set_slot_bit(hlsl_buf_bits, ub_desc->stage, ub_desc->hlsl_register_b_n);
             #elif defined(SOKOL_WGPU)
-            _SG_VALIDATE(ub_desc->wgsl_group0_binding_n < _SG_WGPU_MAX_UB_BINDGROUP_BIND_SLOTS, VALIDATE_SHADERDESC_UB_WGSL_GROUP0_BINDING_OUT_OF_RANGE);
-            _SG_VALIDATE(_sg_validate_slot_bits(wgsl_group0_bits, SG_SHADERSTAGE_NONE, ub_desc->wgsl_group0_binding_n), VALIDATE_SHADERDESC_UB_WGSL_GROUP0_BINDING_COLLISION);
+            _SG_VALIDATE(ub_desc->wgsl_group0_binding_n < _SG_WGPU_MAX_UB_BINDGROUP_BIND_SLOTS, VALIDATE_SHADERDESC_UNIFORMBLOCK_WGSL_GROUP0_BINDING_OUT_OF_RANGE);
+            _SG_VALIDATE(_sg_validate_slot_bits(wgsl_group0_bits, SG_SHADERSTAGE_NONE, ub_desc->wgsl_group0_binding_n), VALIDATE_SHADERDESC_UNIFORMBLOCK_WGSL_GROUP0_BINDING_COLLISION);
             wgsl_group0_bits = _sg_validate_set_slot_bit(wgsl_group0_bits, SG_SHADERSTAGE_NONE, ub_desc->wgsl_group0_binding_n);
             #endif
             #if defined(_SOKOL_ANY_GL)
@@ -16793,10 +16854,10 @@ _SOKOL_PRIVATE bool _sg_validate_shader_desc(const sg_shader_desc* desc) {
             for (size_t u_index = 0; u_index < SG_MAX_UNIFORMBLOCK_MEMBERS; u_index++) {
                 const sg_glsl_shader_uniform* u_desc = &ub_desc->glsl_uniforms[u_index];
                 if (u_desc->type != SG_UNIFORMTYPE_INVALID) {
-                    _SG_VALIDATE(uniforms_continuous, VALIDATE_SHADERDESC_NO_CONT_UB_MEMBERS);
-                    _SG_VALIDATE(u_desc->glsl_name, VALIDATE_SHADERDESC_UB_UNIFORM_GLSL_NAME);
+                    _SG_VALIDATE(uniforms_continuous, VALIDATE_SHADERDESC_UNIFORMBLOCK_NO_CONT_MEMBERS);
+                    _SG_VALIDATE(u_desc->glsl_name, VALIDATE_SHADERDESC_UNIFORMBLOCK_UNIFORM_GLSL_NAME);
                     const int array_count = u_desc->array_count;
-                    _SG_VALIDATE(array_count > 0, VALIDATE_SHADERDESC_UB_ARRAY_COUNT);
+                    _SG_VALIDATE(array_count > 0, VALIDATE_SHADERDESC_UNIFORMBLOCK_ARRAY_COUNT);
                     const uint32_t u_align = _sg_uniform_alignment(u_desc->type, array_count, ub_desc->layout);
                     const uint32_t u_size  = _sg_uniform_size(u_desc->type, array_count, ub_desc->layout);
                     uniform_offset = _sg_align_u32(uniform_offset, u_align);
@@ -16805,7 +16866,7 @@ _SOKOL_PRIVATE bool _sg_validate_shader_desc(const sg_shader_desc* desc) {
                     // with std140, arrays are only allowed for FLOAT4, INT4, MAT4
                     if (ub_desc->layout == SG_UNIFORMLAYOUT_STD140) {
                         if (array_count > 1) {
-                            _SG_VALIDATE((u_desc->type == SG_UNIFORMTYPE_FLOAT4) || (u_desc->type == SG_UNIFORMTYPE_INT4) || (u_desc->type == SG_UNIFORMTYPE_MAT4), VALIDATE_SHADERDESC_UB_STD140_ARRAY_TYPE);
+                            _SG_VALIDATE((u_desc->type == SG_UNIFORMTYPE_FLOAT4) || (u_desc->type == SG_UNIFORMTYPE_INT4) || (u_desc->type == SG_UNIFORMTYPE_MAT4), VALIDATE_SHADERDESC_UNIFORMBLOCK_STD140_ARRAY_TYPE);
                         }
                     }
                 } else {
@@ -16815,8 +16876,8 @@ _SOKOL_PRIVATE bool _sg_validate_shader_desc(const sg_shader_desc* desc) {
             if (ub_desc->layout == SG_UNIFORMLAYOUT_STD140) {
                 uniform_offset = _sg_align_u32(uniform_offset, 16);
             }
-            _SG_VALIDATE((size_t)uniform_offset == ub_desc->size, VALIDATE_SHADERDESC_UB_SIZE_MISMATCH);
-            _SG_VALIDATE(num_uniforms > 0, VALIDATE_SHADERDESC_NO_UB_MEMBERS);
+            _SG_VALIDATE((size_t)uniform_offset == ub_desc->size, VALIDATE_SHADERDESC_UNIFORMBLOCK_SIZE_MISMATCH);
+            _SG_VALIDATE(num_uniforms > 0, VALIDATE_SHADERDESC_UNIFORMBLOCK_NO_MEMBERS);
             #endif
         }
 
@@ -16943,7 +17004,7 @@ _SOKOL_PRIVATE bool _sg_validate_pipeline_desc(const sg_pipeline_desc* desc) {
         _SG_VALIDATE(desc->_start_canary == 0, VALIDATE_PIPELINEDESC_CANARY);
         _SG_VALIDATE(desc->_end_canary == 0, VALIDATE_PIPELINEDESC_CANARY);
         _SG_VALIDATE(desc->shader.id != SG_INVALID_ID, VALIDATE_PIPELINEDESC_SHADER);
-        for (int buf_index = 0; buf_index < SG_MAX_VERTEXBUFFER_BINDSLOTS; buf_index++) {
+        for (size_t buf_index = 0; buf_index < SG_MAX_VERTEXBUFFER_BINDSLOTS; buf_index++) {
             const sg_vertex_buffer_layout_state* l_state = &desc->layout.buffers[buf_index];
             if (l_state->stride == 0) {
                 continue;
@@ -16955,7 +17016,7 @@ _SOKOL_PRIVATE bool _sg_validate_pipeline_desc(const sg_pipeline_desc* desc) {
         if (shd) {
             _SG_VALIDATE(shd->slot.state == SG_RESOURCESTATE_VALID, VALIDATE_PIPELINEDESC_SHADER);
             bool attrs_cont = true;
-            for (int attr_index = 0; attr_index < SG_MAX_VERTEX_ATTRIBUTES; attr_index++) {
+            for (size_t attr_index = 0; attr_index < SG_MAX_VERTEX_ATTRIBUTES; attr_index++) {
                 const sg_vertex_attr_state* a_state = &desc->layout.attrs[attr_index];
                 if (a_state->format == SG_VERTEXFORMAT_INVALID) {
                     attrs_cont = false;
@@ -16967,6 +17028,15 @@ _SOKOL_PRIVATE bool _sg_validate_pipeline_desc(const sg_pipeline_desc* desc) {
                 // on D3D11, semantic names (and semantic indices) must be provided
                 _SG_VALIDATE(!_sg_strempty(&shd->d3d11.attrs[attr_index].sem_name), VALIDATE_PIPELINEDESC_ATTR_SEMANTICS);
                 #endif
+            }
+        }
+        for (size_t color_index = 0; color_index < (size_t)desc->color_count; color_index++) {
+            const sg_blend_state* bs = &desc->colors[color_index].blend;
+            if ((bs->op_rgb == SG_BLENDOP_MIN) || (bs->op_rgb == SG_BLENDOP_MAX)) {
+                _SG_VALIDATE((bs->src_factor_rgb == SG_BLENDFACTOR_ONE) && (bs->dst_factor_rgb == SG_BLENDFACTOR_ONE), VALIDATE_PIPELINEDESC_BLENDOP_MINMAX_REQUIRES_BLENDFACTOR_ONE);
+            }
+            if ((bs->op_alpha == SG_BLENDOP_MIN) || (bs->op_alpha == SG_BLENDOP_MAX)) {
+                _SG_VALIDATE((bs->src_factor_alpha == SG_BLENDFACTOR_ONE) && (bs->dst_factor_alpha == SG_BLENDFACTOR_ONE), VALIDATE_PIPELINEDESC_BLENDOP_MINMAX_REQUIRES_BLENDFACTOR_ONE);
             }
         }
         return _sg_validate_end();
@@ -17381,7 +17451,7 @@ _SOKOL_PRIVATE bool _sg_validate_apply_uniforms(int ub_slot, const sg_range* dat
         SOKOL_ASSERT(pip->shader && (pip->shader->slot.id == pip->cmn.shader_id.id));
 
         const _sg_shader_t* shd = pip->shader;
-        _SG_VALIDATE(shd->cmn.uniform_blocks[ub_slot].stage != SG_SHADERSTAGE_NONE, VALIDATE_AUB_NO_UB_AT_SLOT);
+        _SG_VALIDATE(shd->cmn.uniform_blocks[ub_slot].stage != SG_SHADERSTAGE_NONE, VALIDATE_AUB_NO_UNIFORMBLOCK_AT_SLOT);
         _SG_VALIDATE(data->size == shd->cmn.uniform_blocks[ub_slot].size, VALIDATE_AUB_SIZE);
 
         return _sg_validate_end();
@@ -17579,12 +17649,20 @@ _SOKOL_PRIVATE sg_pipeline_desc _sg_pipeline_desc_defaults(const sg_pipeline_des
         cs->pixel_format = _sg_def(cs->pixel_format, _sg.desc.environment.defaults.color_format);
         cs->write_mask = _sg_def(cs->write_mask, SG_COLORMASK_RGBA);
         sg_blend_state* bs = &def.colors[i].blend;
-        bs->src_factor_rgb = _sg_def(bs->src_factor_rgb, SG_BLENDFACTOR_ONE);
-        bs->dst_factor_rgb = _sg_def(bs->dst_factor_rgb, SG_BLENDFACTOR_ZERO);
         bs->op_rgb = _sg_def(bs->op_rgb, SG_BLENDOP_ADD);
-        bs->src_factor_alpha = _sg_def(bs->src_factor_alpha, SG_BLENDFACTOR_ONE);
-        bs->dst_factor_alpha = _sg_def(bs->dst_factor_alpha, SG_BLENDFACTOR_ZERO);
+        bs->src_factor_rgb = _sg_def(bs->src_factor_rgb, SG_BLENDFACTOR_ONE);
+        if ((bs->op_rgb == SG_BLENDOP_MIN) || (bs->op_rgb == SG_BLENDOP_MAX)) {
+            bs->dst_factor_rgb = _sg_def(bs->dst_factor_rgb, SG_BLENDFACTOR_ONE);
+        } else {
+            bs->dst_factor_rgb = _sg_def(bs->dst_factor_rgb, SG_BLENDFACTOR_ZERO);
+        }
         bs->op_alpha = _sg_def(bs->op_alpha, SG_BLENDOP_ADD);
+        bs->src_factor_alpha = _sg_def(bs->src_factor_alpha, SG_BLENDFACTOR_ONE);
+        if ((bs->op_alpha == SG_BLENDOP_MIN) || (bs->op_alpha == SG_BLENDOP_MAX)) {
+            bs->dst_factor_alpha = _sg_def(bs->dst_factor_alpha, SG_BLENDFACTOR_ONE);
+        } else {
+            bs->dst_factor_alpha = _sg_def(bs->dst_factor_alpha, SG_BLENDFACTOR_ZERO);
+        }
     }
 
     for (int attr_index = 0; attr_index < SG_MAX_VERTEX_ATTRIBUTES; attr_index++) {
@@ -18798,7 +18876,12 @@ SOKOL_API_IMPL void sg_apply_pipeline(sg_pipeline pip_id) {
     _sg.cur_pipeline = pip_id;
     _sg_pipeline_t* pip = _sg_lookup_pipeline(&_sg.pools, pip_id.id);
     SOKOL_ASSERT(pip);
+
     _sg.next_draw_valid = (SG_RESOURCESTATE_VALID == pip->slot.state);
+    if (!_sg.next_draw_valid) {
+        return;
+    }
+
     SOKOL_ASSERT(pip->shader && (pip->shader->slot.id == pip->cmn.shader_id.id));
     _sg_apply_pipeline(pip);
 
@@ -18821,6 +18904,9 @@ SOKOL_API_IMPL void sg_apply_bindings(const sg_bindings* bindings) {
         return;
     }
     if (!_sg.cur_pass.valid) {
+        return;
+    }
+    if (!_sg.next_draw_valid) {
         return;
     }
 
@@ -19228,6 +19314,33 @@ SOKOL_API_IMPL sg_buffer_desc sg_query_buffer_desc(sg_buffer buf_id) {
     return desc;
 }
 
+SOKOL_API_IMPL size_t sg_query_buffer_size(sg_buffer buf_id) {
+    SOKOL_ASSERT(_sg.valid);
+    const _sg_buffer_t* buf = _sg_lookup_buffer(&_sg.pools, buf_id.id);
+    if (buf) {
+        return (size_t)buf->cmn.size;
+    }
+    return 0;
+}
+
+SOKOL_API_IMPL sg_buffer_type sg_query_buffer_type(sg_buffer buf_id) {
+    SOKOL_ASSERT(_sg.valid);
+    const _sg_buffer_t* buf = _sg_lookup_buffer(&_sg.pools, buf_id.id);
+    if (buf) {
+        return buf->cmn.type;
+    }
+    return _SG_BUFFERTYPE_DEFAULT;
+}
+
+SOKOL_API_IMPL sg_usage sg_query_buffer_usage(sg_buffer buf_id) {
+    SOKOL_ASSERT(_sg.valid);
+    const _sg_buffer_t* buf = _sg_lookup_buffer(&_sg.pools, buf_id.id);
+    if (buf) {
+        return buf->cmn.usage;
+    }
+    return _SG_USAGE_DEFAULT;
+}
+
 SOKOL_API_IMPL sg_image_desc sg_query_image_desc(sg_image img_id) {
     SOKOL_ASSERT(_sg.valid);
     sg_image_desc desc;
@@ -19245,6 +19358,79 @@ SOKOL_API_IMPL sg_image_desc sg_query_image_desc(sg_image img_id) {
         desc.sample_count = img->cmn.sample_count;
     }
     return desc;
+}
+
+SOKOL_API_IMPL sg_image_type sg_query_image_type(sg_image img_id) {
+    SOKOL_ASSERT(_sg.valid);
+    const _sg_image_t* img = _sg_lookup_image(&_sg.pools, img_id.id);
+    if (img) {
+        return img->cmn.type;
+    }
+    return _SG_IMAGETYPE_DEFAULT;
+}
+
+SOKOL_API_IMPL int sg_query_image_width(sg_image img_id) {
+    SOKOL_ASSERT(_sg.valid);
+    const _sg_image_t* img = _sg_lookup_image(&_sg.pools, img_id.id);
+    if (img) {
+        return img->cmn.width;
+    }
+    return 0;
+}
+
+SOKOL_API_IMPL int sg_query_image_height(sg_image img_id) {
+    SOKOL_ASSERT(_sg.valid);
+    const _sg_image_t* img = _sg_lookup_image(&_sg.pools, img_id.id);
+    if (img) {
+        return img->cmn.height;
+    }
+    return 0;
+}
+
+SOKOL_API_IMPL int sg_query_image_num_slices(sg_image img_id) {
+    SOKOL_ASSERT(_sg.valid);
+    const _sg_image_t* img = _sg_lookup_image(&_sg.pools, img_id.id);
+    if (img) {
+        return img->cmn.num_slices;
+    }
+    return 0;
+}
+
+SOKOL_API_IMPL int sg_query_image_num_mipmaps(sg_image img_id) {
+    SOKOL_ASSERT(_sg.valid);
+    const _sg_image_t* img = _sg_lookup_image(&_sg.pools, img_id.id);
+    if (img) {
+        return img->cmn.num_mipmaps;
+    }
+    return 0;
+}
+
+SOKOL_API_IMPL sg_pixel_format sg_query_image_pixelformat(sg_image img_id) {
+    SOKOL_ASSERT(_sg.valid);
+    const _sg_image_t* img = _sg_lookup_image(&_sg.pools, img_id.id);
+    if (img) {
+        return img->cmn.pixel_format;
+    }
+    return _SG_PIXELFORMAT_DEFAULT;
+}
+
+SOKOL_API_IMPL sg_usage sg_query_image_usage(sg_image img_id) {
+    SOKOL_ASSERT(_sg.valid);
+    const _sg_image_t* img = _sg_lookup_image(&_sg.pools, img_id.id);
+    if (img) {
+        return img->cmn.usage;
+    }
+    return _SG_USAGE_DEFAULT;
+}
+
+SOKOL_API_IMPL int sg_query_image_sample_count(sg_image img_id) {
+    SOKOL_ASSERT(_sg.valid);
+    SOKOL_ASSERT(_sg.valid);
+    const _sg_image_t* img = _sg_lookup_image(&_sg.pools, img_id.id);
+    if (img) {
+        return img->cmn.sample_count;
+    }
+    return 0;
 }
 
 SOKOL_API_IMPL sg_sampler_desc sg_query_sampler_desc(sg_sampler smp_id) {

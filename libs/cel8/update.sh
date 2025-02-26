@@ -5,7 +5,7 @@
 CEL8_PREFIX="https://raw.githubusercontent.com/mathewmariani/cel8/main"
 
 # files
-CEL8_H="$CEL8_PREFIX/src/cel8.h"
+CEL8_H="$CEL8_PREFIX/cel8.h"
 CEL8_LICENSE="$CEL8_PREFIX/LICENSE"
 
 # output directory

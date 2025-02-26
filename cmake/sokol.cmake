@@ -4,12 +4,6 @@ option(BUILD_WITH_SOKOL "sokol Enabled" ${BUILD_WITH_SOKOL_DEFAULT})
 message("BUILD_WITH_SOKOL: ${BUILD_WITH_SOKOL}")
 
 if(BUILD_WITH_SOKOL)
-  # Linux -pthread shenanigans
-  if (CMAKE_SYSTEM_NAME STREQUAL Linux)
-    set(THREADS_PREFER_PTHREAD_FLAG ON)
-    find_package(Threads REQUIRED)
-  endif()
-
   #defines
   if (CMAKE_SYSTEM_NAME STREQUAL Emscripten)
     add_definitions(-DSOKOL_GLES3)
@@ -17,6 +11,9 @@ if(BUILD_WITH_SOKOL)
     add_definitions(-DSOKOL_GLCORE)
   elseif (CMAKE_SYSTEM_NAME STREQUAL Linux)
     add_definitions(-DSOKOL_GLCORE)
+
+    set(THREADS_PREFER_PTHREAD_FLAG ON)
+    find_package(Threads REQUIRED)
   endif()
 
   set(SOKOL_DIR ${THIRDPARTY_DIR}/sokol)

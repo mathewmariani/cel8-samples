@@ -18,9 +18,7 @@ static void c8_draw(void);
 #include "sokol/sokol_gfx.h"
 #include "sokol/sokol_app.h"
 #include "sokol/sokol_glue.h"
-#if defined(_C8_DEBUG)
 #include "sokol/sokol_log.h"
-#endif
 
 static struct
 {
@@ -34,9 +32,10 @@ static void init(void)
     /* setup sokol-gfx */
     sg_setup(&(sg_desc){
         .environment = sglue_environment(),
+        .logger.func = slog_func,
     });
 
-    /* default pass action */
+    // /* default pass action */
     display.pass = (sg_pass){
         .action = (sg_pass_action){
             .colors[0] = {
@@ -47,54 +46,33 @@ static void init(void)
         .swapchain = sglue_swapchain(),
     };
 
-    const char *display_vs_src = 0;
-    const char *display_fs_src = 0;
-    switch (sg_query_backend())
-    {
-    case SG_BACKEND_GLCORE:
-        display_vs_src =
-            "#version 410\n"
-            "layout(location=0) in vec2 pos;\n"
-            "out vec2 uv;\n"
-            "void main() {\n"
-            "  gl_Position = vec4((pos.xy - 0.5) * 2.0, 0.0, 1.0);\n"
-            "  uv = vec2(pos.x, 1.0 - pos.y);\n"
-            "}\n";
-        display_fs_src =
-            "#version 410\n"
-            "uniform vec3[16] palette;\n"
-            "uniform sampler2D tex;\n"
-            "in vec2 uv;\n"
-            "out vec4 frag_color;\n"
-            "vec4 getColor(int idx) { return vec4(palette[idx], 1.0); }\n"
-            "void main() {\n"
-            "  frag_color = getColor(int(texture(tex, uv).r * 255.0 + 0.5));\n"
-            "}\n";
-        break;
-    case SG_BACKEND_GLES3:
-        display_vs_src =
-            "#version 300 es\n"
-            "attribute vec2 pos;\n"
-            "varying vec2 uv;\n"
-            "void main() {\n"
-            "  gl_Position = vec4((pos.xy - 0.5) * 2.0, 0.0, 1.0);\n"
-            "  uv = vec2(pos.x, 1.0 - pos.y);\n"
-            "}\n";
-        display_fs_src =
-            "#version 300 es\n"
-            "precision mediump float;\n"
-            "uniform vec3[16] palette;\n"
-            "uniform sampler2D tex;\n"
-            "varying vec2 uv;\n"
-            "out vec4 frag_color;\n"
-            "vec4 getColor(int idx) { return vec4(palette[idx], 1.0); }\n"
-            "void main() {\n"
-            "  frag_color = getColor(int(texture(tex, uv).r * 255.0 + 0.5));\n"
-            "}\n";
-        break;
-    default:
-        break;
-    }
+    const char *display_vs_src =
+#if defined(SOKOL_GLES3)
+        "#version 300 es\n"
+#else
+        "#version 410\n"
+#endif
+        "layout(location=0) in vec2 pos;\n"
+        "out vec2 uv;\n"
+        "void main() {\n"
+        "  gl_Position = vec4((pos.xy - 0.5) * 2.0, 0.0, 1.0);\n"
+        "  uv = vec2(pos.x, 1.0 - pos.y);\n"
+        "}\n";
+    const char *display_fs_src =
+#if defined(SOKOL_GLES3)
+        "#version 300 es\n"
+        "precision mediump float;\n"
+#else
+        "#version 410\n"
+#endif
+        "uniform vec3[16] palette;\n"
+        "uniform sampler2D tex;\n"
+        "in vec2 uv;\n"
+        "out vec4 frag_color;\n"
+        "vec4 getColor(int idx) { return vec4(palette[idx], 1.0); }\n"
+        "void main() {\n"
+        "  frag_color = getColor(int(texture(tex, uv).r * 255.0 + 0.5));\n"
+        "}\n";
 
     /* a pipeline state object */
     display.pip = sg_make_pipeline(&(sg_pipeline_desc){
@@ -165,7 +143,7 @@ static void init(void)
 
 static uint32_t _c8__translate_key(const sapp_keycode code)
 {
-    // clang-format off
+    /* clang-format off */
     switch (code)
     {
     case SAPP_KEYCODE_RIGHT: return C8_INPUT_RIGHT;
@@ -179,19 +157,19 @@ static uint32_t _c8__translate_key(const sapp_keycode code)
     default: break;
     }
     return C8_INPUT_INVALID;
-    // clang-format on
+    /* clang-format on */
 }
 
 static void event(const sapp_event *e)
 {
-    // clang-format off
+    /* clang-format off */
     switch (e->type)
     {
     case SAPP_EVENTTYPE_KEY_DOWN: c8_input_set(_c8__translate_key(e->key_code)); break;
     case SAPP_EVENTTYPE_KEY_UP: c8_input_clear(_c8__translate_key(e->key_code)); break;
     default: break;
     }
-    // clang-format on
+    /* clang-format on */
 }
 
 static void frame(void)
@@ -215,10 +193,11 @@ static void frame(void)
     const c8_range_t screen = c8_query_screen();
 
     /* update gpu resources */
-    sg_update_image(display.bind.images[0],
-                    &(sg_image_data){
-                        .subimage[0][0] = {.ptr = screen.ptr, .size = screen.size},
-                    });
+    /* clang-format off */
+    sg_update_image(display.bind.images[0], &(sg_image_data){
+        .subimage[0][0] = {.ptr = screen.ptr, .size = screen.size},
+    });
+    /* clang-format on */
 
     /* graphics pipeline */
     sg_begin_pass(&display.pass);
@@ -239,8 +218,10 @@ sapp_desc sokol_main(int argc, char *argv[])
 {
     /* sokol */
     return (sapp_desc){
+#if defined(SOKOL_GLCORE)
         .gl_major_version = 4,
         .gl_minor_version = 1,
+#endif
         .init_cb = init,
         .frame_cb = frame,
         .cleanup_cb = cleanup,
@@ -248,10 +229,7 @@ sapp_desc sokol_main(int argc, char *argv[])
         .width = C8_WINDOW_WIDTH,
         .height = C8_WINDOW_HEIGHT,
         .window_title = "cel8",
-#if defined(_C8_DEBUG)
-        .win32_console_create = true,
         .logger.func = slog_func,
-#endif
     };
 }
 
