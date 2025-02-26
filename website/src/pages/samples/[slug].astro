@@ -1,6 +1,6 @@
 ---
 import { type CollectionEntry, getCollection } from "astro:content";
-import Page from "../../layouts/Page.astro";
+import Meta from "../../components/Meta.astro";
 import Demo from "../../components/Demo.astro";
 
 export async function getStaticPaths() {
@@ -12,13 +12,82 @@ export async function getStaticPaths() {
 }
 type Props = CollectionEntry<"samples">;
 
-const assignment = Astro.props;
-const { Content } = await assignment.render();
+const sample = Astro.props;
 ---
 
-<Page>
-	<h1>{assignment.data.title}</h1>
-	<p class="lead">{assignment.data.description}</p>
-	<Demo name={assignment.slug} />
-	<Content />
-</Page>
+<html lang="en" data-bs-theme="dark">
+	<head>
+		<Meta />
+	</head>
+	<body>
+		<div class="game-title">
+			{sample.data.title}
+			<span class="game-menu-item">
+				<a class="game-menu-link" href="">home</a>
+			</span>
+			<span class="game-menu-item">
+				<a class="game-menu-link" href={sample.data.src}>src</a>
+			</span>
+		</div>
+		<Demo name={sample.slug} />
+	</body>
+</html>
+<style>
+	body {
+		background: black;
+		display: flex;
+		justify-content: center;
+		align-items: center;
+		height: 100vh;
+		margin: 0;
+	}
+
+	.game {
+		border: 0;
+		width: 128px;
+		height: 128px;
+		overflow: hidden;
+		display: block;
+		image-rendering: optimizeSpeed;
+		image-rendering: -moz-crisp-edges;
+		image-rendering: -o-crisp-edges;
+		image-rendering: -webkit-optimize-contrast;
+		image-rendering: optimize-contrast;
+		image-rendering: crisp-edges;
+		image-rendering: pixelated;
+		-ms-interpolation-mode: nearest-neighbor;
+	}
+
+	.game-title {
+		pointer-events: none;
+		position: absolute;
+		bottom: 10px;
+		left: 10px;
+		margin-top: 0px;
+		padding-left: 10px;
+		color: white;
+		text-decoration: none;
+		z-index: 1;
+		text-align: left;
+		font-family: "Arial Black", Gadget, sans-serif;
+		font-size: 30px;
+	}
+
+	.game-menu-item {
+		pointer-events: auto;
+		font-size: 18px;
+		padding-left: 10px;
+		font-family: Arial, Helvetica, sans-serif;
+	}
+
+	.game-menu-link {
+		text-decoration: none;
+		color: white;
+	}
+
+	a:-webkit-any-link {
+		color: -webkit-link;
+		cursor: pointer;
+		text-decoration: underline;
+	}
+</style>

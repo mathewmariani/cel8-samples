@@ -4,7 +4,7 @@ const samples = defineCollection({
 	type: 'content',
 	schema: z.object({
 		title: z.string(),
-		description: z.string(),
+		src: z.string(),
 	}),
 });
 
