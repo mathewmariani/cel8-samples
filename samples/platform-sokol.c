@@ -22,21 +22,29 @@ static void c8_draw(void);
 
 static struct
 {
-    sg_pass pass;
-    sg_pipeline pip;
-    sg_bindings bind;
-} display;
+    struct
+    {
+        sg_pass pass;
+        sg_pipeline pipeline;
+        sg_bindings binding;
+        sg_image target;
+    } gfx;
+} _platform;
 
-static void init(void)
+static void sokol_init_gfx(void)
 {
     /* setup sokol-gfx */
     sg_setup(&(sg_desc){
         .environment = sglue_environment(),
+        .buffer_pool_size = 2,
+        .image_pool_size = 1,
+        .shader_pool_size = 1,
+        .pipeline_pool_size = 1,
         .logger.func = slog_func,
     });
 
-    // /* default pass action */
-    display.pass = (sg_pass){
+    /* default pass action */
+    _platform.gfx.pass = (sg_pass){
         .action = (sg_pass_action){
             .colors[0] = {
                 .load_action = SG_LOADACTION_CLEAR,
@@ -74,22 +82,10 @@ static void init(void)
         "  frag_color = getColor(int(texture(tex, uv).r * 255.0 + 0.5));\n"
         "}\n";
 
-    /* a pipeline state object */
-    display.pip = sg_make_pipeline(&(sg_pipeline_desc){
-        .layout = {
-            .attrs[0].format = SG_VERTEXFORMAT_FLOAT2,
-        },
+    _platform.gfx.pipeline = sg_make_pipeline(&(sg_pipeline_desc){
         .shader = sg_make_shader(&(sg_shader_desc){
             .vertex_func.source = display_vs_src,
             .fragment_func.source = display_fs_src,
-            .images[0] = {.stage = SG_SHADERSTAGE_FRAGMENT, .image_type = SG_IMAGETYPE_2D},
-            .samplers[0] = {.stage = SG_SHADERSTAGE_FRAGMENT, .sampler_type = SG_SAMPLERTYPE_FILTERING},
-            .image_sampler_pairs[0] = {
-                .stage = SG_SHADERSTAGE_FRAGMENT,
-                .glsl_name = "tex",
-                .image_slot = 0,
-                .sampler_slot = 0,
-            },
             .uniform_blocks[0] = {
                 .stage = SG_SHADERSTAGE_FRAGMENT,
                 .layout = SG_UNIFORMLAYOUT_NATIVE,
@@ -100,8 +96,24 @@ static void init(void)
                     .array_count = 16,
                 },
             },
+            .views = {
+                [0].texture = {.stage = SG_SHADERSTAGE_FRAGMENT, .wgsl_group1_binding_n = 0},
+            },
+            .samplers[0] = {.stage = SG_SHADERSTAGE_FRAGMENT, .sampler_type = SG_SAMPLERTYPE_FILTERING},
+            .texture_sampler_pairs[0] = {
+                .stage = SG_SHADERSTAGE_FRAGMENT,
+                .glsl_name = "tex",
+                .view_slot = 0,
+                .sampler_slot = 0,
+            },
         }),
         .index_type = SG_INDEXTYPE_UINT16,
+        .layout = {
+            .attrs = {
+                [0].format = SG_VERTEXFORMAT_FLOAT2,
+            },
+        },
+        .label = "quad-pipeline",
     });
 
     /* a vertex buffer */
@@ -116,27 +128,75 @@ static void init(void)
     const uint16_t indices[] = {0, 1, 2, 0, 2, 3};
 
     /* bindings */
-    display.bind = (sg_bindings){
+    _platform.gfx.target = sg_make_image(&(sg_image_desc){
+        .width = C8_SCREEN_WIDTH,
+        .height = C8_SCREEN_HEIGHT,
+        .pixel_format = SG_PIXELFORMAT_R8,
+        .usage = {.stream_update = true},
+        .label = "screen-image",
+    });
+    _platform.gfx.binding = (sg_bindings){
         .vertex_buffers[0] = sg_make_buffer(&(sg_buffer_desc){
+            .usage = {
+                .vertex_buffer = true,
+            },
             .data = SG_RANGE(vertices),
+            .label = "quad-vertices",
         }),
         .index_buffer = sg_make_buffer(&(sg_buffer_desc){
-            .type = SG_BUFFERTYPE_INDEXBUFFER,
+            .usage = {
+                .index_buffer = true,
+            },
             .data = SG_RANGE(indices),
+            .label = "quad-indices",
         }),
-        .images[0] = sg_make_image(&(sg_image_desc){
-            .width = C8_SCREEN_WIDTH,
-            .height = C8_SCREEN_HEIGHT,
-            .pixel_format = SG_PIXELFORMAT_R8,
-            .usage = SG_USAGE_STREAM,
+        .views[0] = sg_make_view(&(sg_view_desc){
+            .texture.image = _platform.gfx.target,
         }),
         .samplers[0] = sg_make_sampler(&(sg_sampler_desc){
             .min_filter = SG_FILTER_NEAREST,
             .mag_filter = SG_FILTER_NEAREST,
-            .wrap_u = SG_WRAP_REPEAT,
-            .wrap_v = SG_WRAP_REPEAT,
+            .wrap_u = SG_WRAP_CLAMP_TO_EDGE,
+            .wrap_v = SG_WRAP_CLAMP_TO_EDGE,
+            .label = "screen-sampler",
         }),
     };
+}
+
+void sokol_gfx_draw()
+{
+    /* query palette data. */
+    const c8_range_t pal = c8_query_pal();
+    float palette[48];
+    for (int32_t i = 0; i < 48; ++i)
+    {
+        palette[i] = ((uint8_t *)pal.ptr)[i] / 255.0f;
+    }
+
+    /* query screen data. */
+    const c8_range_t screen = c8_query_screen();
+
+    /* update gpu resources */
+    /* clang-format off */
+    sg_update_image(_platform.gfx.target, &(sg_image_data){
+        .mip_levels[0] = {.ptr = screen.ptr, .size = screen.size},
+    });
+    /* clang-format on */
+
+    /* graphics pipeline */
+    sg_begin_pass(&_platform.gfx.pass);
+    sg_apply_pipeline(_platform.gfx.pipeline);
+    sg_apply_bindings(&_platform.gfx.binding);
+    sg_apply_uniforms(0, SG_RANGE_REF(palette));
+    sg_draw(0, 6, 1);
+    sg_end_pass();
+    sg_commit();
+}
+
+static void init(void)
+{
+    /* setup sokol-gfx */
+    sokol_init_gfx();
 
     c8_load();
 }
@@ -181,36 +241,17 @@ static void frame(void)
     /* FIXME: proof of concept for `c8_btnp()` */
     c8_input_clear(C8_INPUT_RIGHT | C8_INPUT_LEFT | C8_INPUT_UP | C8_INPUT_DOWN | C8_INPUT_A | C8_INPUT_B | C8_INPUT_START | C8_INPUT_SELECT);
 
-    /* query palette data. */
-    const c8_range_t pal = c8_query_pal();
-    float palette[48];
-    for (int32_t i = 0; i < 48; ++i)
-    {
-        palette[i] = ((uint8_t *)pal.ptr)[i] / 255.0f;
-    }
-
-    /* query screen data. */
-    const c8_range_t screen = c8_query_screen();
-
-    /* update gpu resources */
-    /* clang-format off */
-    sg_update_image(display.bind.images[0], &(sg_image_data){
-        .subimage[0][0] = {.ptr = screen.ptr, .size = screen.size},
-    });
-    /* clang-format on */
-
-    /* graphics pipeline */
-    sg_begin_pass(&display.pass);
-    sg_apply_pipeline(display.pip);
-    sg_apply_bindings(&display.bind);
-    sg_apply_uniforms(0, SG_RANGE_REF(palette));
-    sg_draw(0, 6, 1);
-    sg_end_pass();
-    sg_commit();
+    /* draw graphics */
+    sokol_gfx_draw();
 }
 
 static void cleanup(void)
 {
+    sg_destroy_pipeline(_platform.gfx.pipeline);
+    sg_destroy_image(_platform.gfx.target);
+    sg_destroy_buffer(_platform.gfx.binding.vertex_buffers[0]);
+    sg_destroy_buffer(_platform.gfx.binding.index_buffer);
+    sg_destroy_sampler(_platform.gfx.binding.samplers[0]);
     sg_shutdown();
 }
 
