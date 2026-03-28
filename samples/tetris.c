@@ -15,6 +15,7 @@ enum
   TETRIS_FIELD_HEIGHT = 16,
   TETRIS_PIECE_COUNT = 7,
   TETRIS_CLEAR_LINE_TICKS = 25,
+  TETRIS_LOCK_DELAY = 30,
 };
 
 uint8_t color_table[] = {
@@ -85,9 +86,12 @@ struct
 
   char str_buffer[5];
 
+  uint8_t lock_timer;
+
   int cx, cy, cr;
   int cp, np;
   int8_t grid[16][8];
+  bool line_flagged[TETRIS_FIELD_HEIGHT];
 } state;
 
 static int rotate(int x, int y, int r)
@@ -186,10 +190,7 @@ static int count_line(int y)
 static void flag_for_clear(int y)
 {
   state.should_clear = true;
-  for (int x = 0; x < TETRIS_FIELD_WIDTH; x++)
-  {
-    state.grid[y][x] = 0x70;
-  }
+  state.line_flagged[y] = true;
 }
 
 static void clear_line(int line)
@@ -214,7 +215,6 @@ static void clear_lines(void)
     {
       count += (state.grid[y][x] != 0) ? 1 : 0;
     }
-
     /* clear the row */
     if (count == TETRIS_FIELD_WIDTH)
     {
@@ -225,29 +225,33 @@ static void clear_lines(void)
 
 static void move_piece(void)
 {
-  uint8_t *t = tetromino[state.cp];
   if (does_piece_fit(state.cp, state.cr, state.cx, state.cy + 1))
   {
     state.cy++;
+    state.lock_timer = 0;
   }
   else
   {
-    lock_piece();
-    clear_lines();
+    state.lock_timer++;
 
-    /* update score, lines and level */
-    state.score += 25;
-    state.level = (int)floor(state.lines / 10);
+    if (state.lock_timer > TETRIS_LOCK_DELAY)
+    {
+      lock_piece();
+      clear_lines();
 
-    /* new piece */
-    state.cx = 2;
-    state.cy = 0;
-    state.cr = 0;
-    state.cp = state.np;
-    state.np = rand() % 7;
+      state.score += 25;
+      state.level = (int)floor(state.lines / 10);
 
-    /* game over */
-    state.gameover = !does_piece_fit(state.cp, state.cr, state.cx, state.cy);
+      state.cx = 2;
+      state.cy = 0;
+      state.cr = 0;
+      state.cp = state.np;
+      state.np = rand() % 7;
+
+      state.gameover = !does_piece_fit(state.cp, state.cr, state.cx, state.cy);
+
+      state.lock_timer = 0;
+    }
   }
 }
 
@@ -302,7 +306,6 @@ void c8_update(void)
   {
     reset();
   }
-
   if (c8_btn(C8_INPUT_UP))
   {
     if (does_piece_fit(state.cp, state.cr + 1, state.cx, state.cy))
@@ -310,18 +313,18 @@ void c8_update(void)
       state.cr++;
     }
   }
-  else if (c8_btn(C8_INPUT_DOWN))
+  if (c8_btn(C8_INPUT_DOWN))
   {
     drop_piece();
   }
-  else if (c8_btn(C8_INPUT_LEFT))
+  if (c8_btn(C8_INPUT_LEFT))
   {
     if (does_piece_fit(state.cp, state.cr, state.cx - 1, state.cy))
     {
       state.cx--;
     }
   }
-  else if (c8_btn(C8_INPUT_RIGHT))
+  if (c8_btn(C8_INPUT_RIGHT))
   {
     if (does_piece_fit(state.cp, state.cr, state.cx + 1, state.cy))
     {
@@ -331,25 +334,64 @@ void c8_update(void)
 
   if (!state.gameover)
   {
+    bool grounded = !does_piece_fit(state.cp, state.cr, state.cx, state.cy + 1);
+
+    /* gravity */
     if (state.ticks % drop_speed() == 0)
     {
-      move_piece();
+      if (!grounded)
+      {
+        state.cy++;
+      }
     }
+
+    /* lock delay */
+    if (grounded)
+    {
+      state.lock_timer++;
+      if (state.lock_timer > TETRIS_LOCK_DELAY)
+      {
+        lock_piece();
+        clear_lines();
+
+        state.score += 25;
+        state.level = (int)floor(state.lines / 10);
+
+        state.cx = 2;
+        state.cy = 0;
+        state.cr = 0;
+        state.cp = state.np;
+        state.np = rand() % 7;
+
+        state.gameover = !does_piece_fit(state.cp, state.cr, state.cx, state.cy);
+
+        state.lock_timer = 0;
+      }
+    }
+    else
+    {
+      state.lock_timer = 0;
+    }
+
     state.ticks++;
   }
 
   /* apply fx */
   if (state.should_clear)
   {
-    if (++state.fx_ticks >= TETRIS_CLEAR_LINE_TICKS)
+    state.fx_ticks++;
+
+    if (state.fx_ticks >= TETRIS_CLEAR_LINE_TICKS)
     {
       for (int y = 0; y < TETRIS_FIELD_HEIGHT; y++)
       {
-        if (state.grid[y][0] == color_table[7])
+        if (state.line_flagged[y])
         {
           clear_line(y);
+          state.line_flagged[y] = false;
         }
       }
+
       state.fx_ticks = 0;
       state.should_clear = false;
     }
@@ -361,12 +403,25 @@ void c8_draw()
   c8_cls(0x00, 0x00);
 
   /* draw field */
+  bool blink = (state.fx_ticks / (5 - state.fx_ticks / 10)) % 2 == 0;
   for (int y = 0; y < TETRIS_FIELD_HEIGHT; y++)
   {
+    bool blink = state.line_flagged[y] && ((state.fx_ticks / 5) % 2 == 0);
+
     for (int x = 0; x < TETRIS_FIELD_WIDTH; x++)
     {
-      c8_color(state.grid[y][x] == 0x00 ? 0x05 : state.grid[y][x]);
-      c8_put(x, y, state.grid[y][x] == 0x00 ? 0x01 : 0x00);
+      uint8_t cell = state.grid[y][x];
+
+      if (blink)
+      {
+        c8_color(0x70);
+        c8_put(x, y, 0x00);
+      }
+      else
+      {
+        c8_color(cell == 0 ? 0x05 : cell);
+        c8_put(x, y, cell == 0 ? 0x01 : 0x00);
+      }
     }
   }
 
