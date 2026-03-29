@@ -11,11 +11,14 @@
 enum
 {
   MIN_SNAKE_SIZE = 3,
-  MAX_SNAKE_SIZE = 256,
+  MAX_SNAKE_SIZE = 255,
   SNAKE_HEAD_SEG = 0x00,
   SNAKE_BODY_SEG = 0x01,
   GRID_PATTERN = 0x02,
   FRUIT_SCORE = 50,
+
+  GRID_WIDTH = 16,
+  GRID_HEIGHT = 16,
 };
 
 typedef struct
@@ -54,12 +57,14 @@ static inline bool check_overlap(const pos_t a, const pos_t b)
 
 static inline bool check_overlaps(const pos_t a, const pos_t *b, size_t len)
 {
-  bool ret = false;
-  for (int32_t i = 0; i < len; i++)
+  for (int i = 0; i < len; i++)
   {
-    ret |= check_overlap(a, *(b + i));
+    if (check_overlap(a, b[i]))
+    {
+      return true;
+    }
   }
-  return ret;
+  return false;
 }
 
 static inline void place_snake(void)
@@ -76,9 +81,20 @@ static inline void place_apple(void)
 {
   do
   {
-    apple.pos.x = rand() % 0x0f;
-    apple.pos.y = rand() % 0x0f;
+    apple.pos.x = rand() % 16;
+    apple.pos.y = rand() % 16;
   } while (check_overlaps(apple.pos, &snake.pos, snake.size));
+}
+
+static void reset(void)
+{
+
+  place_snake();
+  place_apple();
+
+  /* game state */
+  state.gameover = false;
+  state.timer = 0;
 }
 
 void c8_load(void)
@@ -127,72 +143,100 @@ void c8_load(void)
   /* 00000000  -- 0x00 */
   /* 00000000  -- 0x00 */
   /* 00000000  -- 0x00 */
-  c8_poke4(C8_MEM_FONT_ADDR + 0x10 * 4, 0x00000018);
-  c8_poke4(C8_MEM_FONT_ADDR + 0x11 * 4, 0x18000000);
+  c8_poke4(C8_MEM_FONT_ADDR + 0x10 + 0x00 * 4, 0x00000018);
+  c8_poke4(C8_MEM_FONT_ADDR + 0x10 + 0x01 * 4, 0x18000000);
 
-  place_snake();
-  place_apple();
-
-  /* game state */
-  state.gameover = false;
-  state.timer = 0;
+  reset();
 }
 
 static void move_snake(void)
 {
-  if (c8_btn(C8_INPUT_UP))
-  {
-    dx = 0, dy = -1;
-  }
-  else if (c8_btn(C8_INPUT_DOWN))
-  {
-    dx = 0, dy = +1;
-  }
-  else if (c8_btn(C8_INPUT_LEFT))
-  {
-    dx = -1, dy = 0;
-  }
-  else if (c8_btn(C8_INPUT_RIGHT))
-  {
-    dx = +1, dy = 0;
-  }
+  pos_t next = snake.pos[0];
+  // next.x += dx;
+  // next.y += dy;
 
-  pos_t temp;
-  pos_t prev = snake.pos[0];
-  snake.pos[0].x += dx;
-  snake.pos[0].y += dy;
+  next.x = (next.x + dx + GRID_WIDTH) % GRID_WIDTH;
+  next.y = (next.y + dy + GRID_HEIGHT) % GRID_HEIGHT;
 
-  /* move snake segments */
-  for (int i = 1; i < snake.size; i++)
-  {
-    temp = snake.pos[i];
-    snake.pos[i] = prev;
-    prev = temp;
-  }
+  /* check for wall collisions */
+  // if (next.x >= 16 || next.y >= 16 || next.x < 0 || next.y < 0)
+  // {
+  //   state.gameover = true;
+  //   return;
+  // }
 
   /* check for collisions with body */
   for (int i = 1; i < snake.size; i++)
   {
-    if (check_overlap(snake.pos[0], snake.pos[i]))
+    if (check_overlap(next, snake.pos[i]))
     {
       state.gameover = true;
+      return;
     }
   }
 
   /* check for collision with apple */
-  if (check_overlap(snake.pos[0], apple.pos))
-  {
-    /* increae snake size */
-    snake.size++;
-    snake.pos[snake.size - 1] = snake.pos[0];
-    state.score += FRUIT_SCORE;
+  bool ate_apple = check_overlap(next, apple.pos);
 
+  /* move snake segments */
+  pos_t prev = snake.pos[0];
+  snake.pos[0] = next;
+
+  for (int i = 1; i < snake.size; i++)
+  {
+    pos_t temp = snake.pos[i];
+    snake.pos[i] = prev;
+    prev = temp;
+  }
+
+  /* increae snake size */
+  if (ate_apple)
+  {
+    if (snake.size < MAX_SNAKE_SIZE)
+    {
+      snake.pos[snake.size] = prev;
+      snake.size++;
+    }
+
+    state.score += FRUIT_SCORE;
     place_apple();
   }
 }
 
 void c8_update(void)
 {
+  if (c8_btn(C8_INPUT_SELECT))
+  {
+    reset();
+  }
+
+  if (state.gameover)
+  {
+    return;
+  }
+
+  /* handle input */
+  if (c8_btn(C8_INPUT_UP) && dy != 1)
+  {
+    dx = 0;
+    dy = -1;
+  }
+  else if (c8_btn(C8_INPUT_DOWN) && dy != -1)
+  {
+    dx = 0;
+    dy = 1;
+  }
+  else if (c8_btn(C8_INPUT_LEFT) && dx != 1)
+  {
+    dx = -1;
+    dy = 0;
+  }
+  else if (c8_btn(C8_INPUT_RIGHT) && dx != -1)
+  {
+    dx = 1;
+    dy = 0;
+  }
+
   if ((--state.timer) <= 0)
   {
     state.timer = 5 - (snake.size / 12);
@@ -200,7 +244,10 @@ void c8_update(void)
     {
       state.timer = 2;
     }
-    move_snake();
+    if (dx != 0 || dy != 0)
+    {
+      move_snake();
+    }
   }
 }
 
@@ -231,5 +278,16 @@ void c8_draw(void)
   for (int32_t i = 1; i < snake.size; i++)
   {
     c8_put(snake.pos[i].x, snake.pos[i].y, SNAKE_BODY_SEG);
+  }
+
+  if (state.gameover)
+  {
+    c8_color(0x07);
+    c8_print(6, 5, "GAME");
+    c8_print(6, 6, "OVER");
+    c8_color(0x05);
+    c8_print(5, 8, "PRESS ");
+    c8_print(5, 9, "'R' TO");
+    c8_print(5, 10, " RESET");
   }
 }
