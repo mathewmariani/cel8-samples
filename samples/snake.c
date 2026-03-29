@@ -83,7 +83,7 @@ static inline void place_apple(void)
   {
     apple.pos.x = rand() % 16;
     apple.pos.y = rand() % 16;
-  } while (check_overlaps(apple.pos, &snake.pos, snake.size));
+  } while (check_overlaps(apple.pos, snake.pos, snake.size));
 }
 
 static void reset(void)
@@ -152,18 +152,22 @@ void c8_load(void)
 static void move_snake(void)
 {
   pos_t next = snake.pos[0];
-  // next.x += dx;
-  // next.y += dy;
 
+#if (true)
+  /* screen wrapping */
   next.x = (next.x + dx + GRID_WIDTH) % GRID_WIDTH;
   next.y = (next.y + dy + GRID_HEIGHT) % GRID_HEIGHT;
+#else
+  next.x += dx;
+  next.y += dy;
 
   /* check for wall collisions */
-  // if (next.x >= 16 || next.y >= 16 || next.x < 0 || next.y < 0)
-  // {
-  //   state.gameover = true;
-  //   return;
-  // }
+  if (next.x >= 16 || next.y >= 16 || next.x < 0 || next.y < 0)
+  {
+    state.gameover = true;
+    return;
+  }
+#endif
 
   /* check for collisions with body */
   for (int i = 1; i < snake.size; i++)
